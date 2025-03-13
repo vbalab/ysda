@@ -1,0 +1,2459 @@
+<!-- markdownlint-disable MD025, MD001, MD024 -->
+
+# Set up
+
+- <https://gitlab.manytask.org/cpp0/public-2024-fall/-/tree/main/multiplication>  
+- <https://gitlab.manytask.org/cpp0/public-2024-fall/-/blob/main/docs/setup.md>  
+- <https://docs.google.com/document/d/1K0t05Bmqb3he3gW4ORQXfkVfFouS4FRT/edit>
+
+2025:
+
+- [Setup](https://gitlab.manytask.org/cpp/public-2025-spring/-/blob/main/docs/SETUP.md)
+<https://gitlab.manytask.org/cpp/public-2025-spring/-/tree/main/range-sum>
+
+## How to set up linter (on Fedora Linux)
+
+```sh
+sudo dnf install clang clang-tools-extra
+```
+
+Then at run_linter.sh remove "-16" everywhere (from clang-format-16, clang-tidy-16)
+
+# Tasks
+
+## Pull
+
+In vbalab do:
+
+```sh
+git pull upstream main
+git pull --rebase upstream main
+```
+
+OR [*I don't know why, but origin works*]
+
+```sh
+git pull --rebase origin main
+```
+
+to update tasks.
+
+## Debug
+
+In lower panel of VScode select test_NAME_OF_TASK and press bug.
+
+## Tests & Benchmarks
+
+### Setup
+
+To create build for benchmarks do:
+
+```sh
+mkdir build
+cd build
+cmake ..
+```
+
+```sh
+mkdir build-asan
+cd build-asan
+cmake -DCMAKE_BUILD_TYPE=Asan ..
+```
+
+```sh
+mkdir build-tsan
+cd build-tsan
+cmake -DCMAKE_BUILD_TYPE=Tsan ..
+```
+
+For benchmarks:
+
+```sh
+mkdir build-release
+cd build-release
+cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo ..
+```
+
+### Run Tests
+
+If no particular test_NAME_OF_TASK (being in "build-..." directory):
+
+```sh
+cmake .
+# OR
+cmake -DCMAKE_BUILD_TYPE=Asan .
+# OR
+cmake -DCMAKE_BUILD_TYPE=Tsan .
+```
+
+to run tests:
+
+```sh
+make test_NAME_OF_TASK
+./test_NAME_OF_TASK
+./test_NAME_OF_TASK "Name of the test among all tests"
+```
+
+### Run Benchmarks
+
+If no particular bench_NAME_OF_TASK:
+
+```sh
+cmake -DCMAKE_BUILD_TYPE=RelWithDebInfo .
+```
+
+To run:
+
+```sh
+make bench_NAME_OF_TASK
+./bench_NAME_OF_TASK
+```
+
+## Linter
+
+to run linter (being in "build" directory):
+
+```sh
+../run_linter.sh NAME_OF_TASK/
+```
+
+## Push
+
+to add to gitlab:
+
+```sh
+git add ../NAME_OF_TASK/NAME_OF_TASK.h
+git commit -m "solve NAME_OF_TASK, try 1"
+git push origin main
+```
+
+# Notes
+
+**C-style string** is `const char*`
+
+---
+
+When adding elements to a std::vector that exceeds its current capacity, the vector **reallocates** memory to accommodate more elements. This reallocation **invalidates any pointers**, references, or iterators to the elements, as the underlying memory location changes. Consequently, dereferencing those pointers after reallocation leads to undefined behavior.
+
+---
+
+`std::size_t` is a platform-dependent (32 or 64), unsigned type used for representing sizes and counts.
+
+---
+
+Choose `std::array` over `std::vector` for:
+
+- Compile-time fixed size.
+- Better speed and lower overhead for small arrays.
+- Contiguous memory layout.
+
+---
+
+For small primitives using direct copying like `std::size_t` is better than `const std::size_t&` (which goes with Additional Indirection, Potential Cache Misses, Aliasing).
+
+---
+
+`std::any` - a type-safe way to store and retrieve values of any type, using type erasure.
+
+---
+
+In `std::cout` use explicit **flushing** through `std::flush` or `std::endl` when you want to ensure the output is immediately displayed, such as in debugging or interactive applications.  
+Otherwise use `'\n'`;
+
+`std::cerr` is **unbuffered**, it doesn’t need explicit flushing.
+
+---
+
+-`std::map` is an ordered associative container that uses **Red-Black Tree** for storage.
+
+-`std::unordered_map` is a hash-based container that requires a **hash function** to determine key uniqueness.
+
+---
+
+int overflow - UB: could result in anything from crashing the program to returning a wrapped-around value, depending on C++ version and computer architecture.
+
+uint overflow - well-defined and causes the value to wrap around.
+
+# Lecture 1
+
+Nothing interesting.
+
+# Lecture 2 - RVO
+
+```cpp
+int a[4];
+std::size(a) = size_of(a) / size_of(*a);
+```
+
+To create array of references use **std::reference_wrapper**
+
+## Return Value Optimization (RVO)
+
+**RVO**: Optimizes away the copy for temporary objects returned by value.
+
+Say you have
+
+```cpp
+struct LargeObject {
+    LargeObject() { std::cout << "LargeObject Constructor\n"; }
+    LargeObject(const LargeObject&) { std::cout << "LargeObject Copy Constructor\n"; }
+    ~LargeObject() { std::cout << "LargeObject Destructor\n"; }
+};
+
+LargeObject CreateLargeObject() {
+    return LargeObject();  // RVO will optimize this return in C++17
+}
+
+int main() {
+    LargeObject obj = CreateLargeObject();  // No copy or move constructor will be called due to RVO
+}
+```
+
+Output without RVO (if RVO were not applied):
+
+```txt
+LargeObject Constructor
+LargeObject Copy Constructor
+LargeObject Destructor          // of original
+LargeObject Destructor          // of copied
+```
+
+With RVO:
+
+```txt
+LargeObject Constructor
+LargeObject Destructor
+```
+
+## Named RVO
+
+C++17 guarantees RVO, but NRVO is still optional (compiler-dependent)
+
+**NRVO**: Optimizes away the copy for named objects returned by value (not guaranteed but commonly done by compilers).
+
+```cpp
+LargeObject CreateLargeObjectNRVO() {
+    LargeObject obj;  // a named object
+    // Do some operations on obj
+    return obj;  // NRVO might kick in here to avoid the copy
+}
+```
+
+## Namespace
+
+```cpp
+namespace MyCode {
+    struct Point {};
+}
+
+MyCode::Point p;
+```
+
+## .h & .cpp
+
+For modularity, easier maintenance, and faster builds:
+
+- declaration $\rightarrow$ `.h` (headers)  
+  Includes necessary #include directives and header guards (`#pragma once` or `#ifndef` ... `#define`) and does only declaration.
+
+- definitions $\rightarrow$ `.cpp`  
+  Includes the corresponding header file and does all implementation of declared in `.h`.
+
+**Linker** is a tool that combines one or more object files generated by a compiler into a single executable or library.
+
+If .h gets changed $\rightarrow$ everything in project gets recompiled.  
+If .cpp gets changed $\rightarrow$ recompiled only 1 file & linker does the job.
+
+# Lecture 3 - Structs & Classes
+
+## `struct` members
+
+`struct`s are fully determined at compile time.  
+So, struct member offsets are known at compile time, without storing any meta-data (in form of overhead) at runtime.`
+
+The actual memory location of a field is just: base + offset.
+
+Regular (non-`virtual`) `class`es behave just like `struct`s in terms of memory layout.
+
+## `const` & `mutable`
+
+```cpp
+struct MyStruct {
+    int value;
+    mutable std::size_t count;  // to bypass `const` of method
+
+    // Const method: Cannot modify member variables
+    int getValueConst() const {
+        count++;                // ok
+        value++;                // compilation error
+        return value;
+    }
+
+    int getValue() const {
+        return value;
+    }
+
+    bool Checker(const MyStruct& s) {
+        s.getValueConst();      // compilation error
+        s.getValue();           // ok
+    }
+};
+```
+
+## initializer list
+
+```cpp
+struct MyStruct {
+    int value1;
+    int value2;
+    const int value3;
+    const int value4;
+
+    MyStruct(int _value1, int _value2, int _value3,  int _value4)
+        : value1(_value1)       // initializer list
+        , value3(_value3)
+        , value4(_value4) {     // const can be initialized only here
+        value2 = _value2;       // at this stage MyStruct is already initialized and only changes attributes
+        value3 = _value3 + value4;
+    }
+}
+```
+
+**explicit** constructor;
+
+## `static`
+
+```cpp
+struct MyStruct {
+    static std::size_t init_count;  // attribute of struct, not particular object
+    inline static int smth = 0;     // inline initialization
+
+    MyStruct() {
+        ++init_count;
+    }
+
+    static int smth();              // again.
+}
+
+std::size_t MyStruct::init_count = 0;
+MyStruct s1;                    // init_count = 1
+MyStruct s2;                    // init_count = 2
+
+Mystruct::smth();
+```
+
+## `public` & `private`; `friend`
+
+By default: in class all private, in struct all public.
+
+Use **friend** for public methods that want to get private/protected members.  
+Also, it allows to use them to another object of the same type.
+
+```cpp
+class MyClass {
+private:
+    int value;
+
+public:
+    MyClass(int v) : value(v) {}
+
+    friend MyClass operator+(const MyClass& lhs, const MyClass& rhs);
+};
+
+MyClass operator+(const MyClass& lhs, const MyClass& rhs) {
+    // Can access private members of both lhs and rhs
+    return MyClass(lhs.value + rhs.value);
+}
+```
+
+## `delete`
+
+The **delete** keyword can be used to explicitly disable certain functions, preventing specific actions such as copying, moving, or assignment.
+
+```cpp
+class MyClass {
+public:
+    MyClass() = default;
+    MyClass(const MyClass&) = delete;       // Disable copy constructor
+    MyClass(MyClass&&) = delete;            // Disable move constructor
+    MyClass& operator=(const MyClass&) = delete;  // Disable copy assignment
+    MyClass& operator=(MyClass&&) = delete;       // Disable move assignment
+};
+```
+
+# Lecture 4.1 - Overloading & Templates
+
+## Function Overloading
+
+**Function overloading** - allows multiple functions to have the same name but different parameters
+
+```cpp
+void print(int i) {
+    std::cout << "Integer: " << i << '\n';
+}
+
+void print(const std::string& i) {
+    std::cout << "String: " << i << '\n';
+}
+
+template<typename T>
+void print(T t, int u) {
+    std::cout << "...: " << t << ", " << u << '\n';
+}
+```
+
+## `template`
+
+```cpp
+template<typename T>
+T MyMax(T a, T b) {}
+
+MyMax(4, 5);
+MyMax<int>(4, 5);       // explicit type indication
+
+template<typename T, typename U>
+T MyPrint(T a, U b) {}
+```
+
+## Template Specialization
+
+1. Full Template Specialization - creating a completely different implementation of a template for a specific type
+
+   ```cpp
+   template<typename T>
+   void print(T value) {
+       std::cout << "Generic template: " << value << '\n';
+   }
+
+   template<>
+   void print<int>(int value) {        // Full specialization for type `int`
+       std::cout << "Specialized template for int: " << value << '\n';
+   }
+   ```
+
+2. Partial Template Specialization (Not for Functions) - applies *only* to class templates, not to function templates (for them this is function overloading)
+
+    ```cpp
+    template<typename T, typename U>
+    class Example {};
+
+    // Partial specialization when the second parameter is `int`
+    template<typename T>
+    class Example<T, int> {};
+
+    int main() {
+        Example<double, double> e1;
+        e1.show();  // Generic template
+
+        Example<double, int> e2;
+        e2.show();  // Partial specialization with second type as int
+    }
+    ```
+
+## Lookup Order
+
+The order of function lookup (based on a given set of arguments):
+
+1. Regular Function (overloading here)
+2. Template Specialization
+3. Generic Template Function
+
+# Lecture 4.2 - Functors & Lambdas & Iterators
+
+## Functors
+
+A **functor** in C++ is an instance of a class or struct that has the function call `operator()`.
+
+Any class/struct that has the operator() implemented is considered a functor.
+
+```cpp
+struct Functor {
+    int factor;
+
+    Functor(int f) : factor(f) {}
+
+    int operator()(int x) const {
+        return x * factor;
+    }
+};
+```
+
+Regular functions are *not functors*, but they are callable objects just like functors.
+
+## Lambda function
+
+A **lambda function** (or lambda expression) in C++ is an anonymous function that can be defined in place without name.
+
+Syntax: `[ capture ] ( parameters ) -> return_type { body }`.
+
+**capture** - specifies which variables from the surrounding scope are captured.
+
+Capturing Variables:
+
+- [ ]: No capture (only parameters can be used).
+- [=]: Capture all variables by value.
+- [&]: Capture all variables by reference.
+- [x]: Capture x by value.
+- [&x]: Capture x by reference.
+
+```cpp
+auto lambda = [](int x, int y) {
+    return x + y;
+};
+
+auto add = [a, &b](int x) {
+    b += a;
+    b += x;
+    return b;
+};
+```
+
+```cpp
+inc i = 0;
+
+void count = [cnt = i]() {
+    ++cnt;      // error
+};
+
+void count = [cnt = i]() mutable {
+    ++cnt;
+};
+```
+
+## Higher-Order Functions
+
+In C++, higher-order functions are typically implemented using function pointers, std::function, lambdas, or functors.
+
+```cpp
+void applyFunction(int x, int(*func)(int)) {
+    std::cout << "Result: " << func(x) << '\n';
+}
+```
+
+---
+
+## Iterators
+
+```cpp
+std::next(begin)
+++begin;    // the same
+```
+
+1. Input
+
+   - Allows reading elements from a container once in a _single pass_.
+   - Supports `*it++` and `it++`.
+   - Use case: reading from input streams or traversing a container once.
+
+2. Forward = Input + allows multiple passes
+
+3. Bidirectional = Forward + backward (--it)
+
+   - support only ==, != comparison
+   - std::list & std::set
+
+4. Random Access = Bidirectional + const time for `it + n` or `it[n]`
+
+   - support <, >, <=, >= comparison
+   - Found in std::vector & std::deque.
+
+5. Contiguous = random + elements are stored sequentially in memory
+
+   - This ensures better cache performance
+   - std::vector and std::array.
+
+6. Output
+   - `*it++ = value` and `it++` are used to insert or modify elements.
+   - Use case: writing to output streams or containers.
+
+## `ranges`
+
+**Ranges** in C++ (introduced in C++20) provide a more modern, flexible way to work with sequences of data, offering a powerful alternative to the traditional iterator-based approach.
+
+The main difference between ranges & iterators is that types of range for the start and end may be different.
+
+C++20 provides range-based versions of algorithms (like `std::ranges::sort`, `std::ranges::find`), which operate directly on ranges.
+
+## `views`
+
+The **ranges::views** provide a powerful way to create **lazy**, **non-owning** adaptors over ranges.
+
+```cpp
+std::vector<int> v = {0, 1, 2, 3}
+for (int x : std::views::filter(v, [](int x) { return x % 2 == 0; })) {
+    std::cout << x << " ";  // Outputs: 0 2
+}
+```
+
+view **chaining**:
+
+```cpp
+std::vector<int> vec = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+
+for (auto x: vec | std::views::filter([](int x) { return x % 2 == 0; })
+                 | std::views::transform([](int x) { return x * x; })
+                 | std::views::take(3)) {
+    std::cout << x << " ";
+}
+```
+
+# Lecture 5 - Move semantics
+
+## lvalue & rvalue
+
+**lvalue** (locator value):
+
+- object that has an address
+- referenced by `&`
+
+**rvalue** (right value):
+
+- temporary object or value that does not have a persistent memory address (literals or the result of an arithmetic operation)
+- referenced by `&&`
+
+rvalue allow the transfer of resources (!) from temporary objects, reducing unnecessary copying.
+
+`std::move()`: lvalue $\rightarrow$ rvalue, enabling the move semantics.  
+Typically used when passing an lvalue to a function expecting an rvalue.
+
+```cpp
+class SMTH {
+public:
+    SMTH(int&& value) : value_(value) {}
+private:
+    int value_;
+};
+
+int a = 2;
+SMTH b = SMTH(a);   // error
+SMTH b = SMTH(2);   // ok
+SMTH b = SMTH(std::move(a));   // ok
+```
+
+## Rule of 3, 5, 0
+
+If a class defines one of the following, it should define all 3,5:
+
+- Destructor
+- Copy Constructor
+- Copy Assignment Operator
+- Move Constructor
+- Move Assignment Operator
+
+**Rule of 0**: developers should avoid manually defining any of the special member functions whenever possible, leveraging automatic resource management techniques provided by C++ standard library utilities such as `std::unique_ptr`, `std::shared_ptr`, and other **RAII** (Resource Acquisition Is Initialization) patterns.
+
+```cpp
+class MyString {
+    char* data;
+
+public:
+    MyString(const char* str = "") {
+        data = new char[std::strlen(str) + 1];
+        std::strcpy(data, str);
+    }
+
+    // Destructor
+    ~MyString() {
+        delete[] data;
+    }
+
+    // Copy Constructor
+    MyString(const MyString& other) {
+        data = new char[std::strlen(other.data) + 1];
+        std::strcpy(data, other.data);  // or std::memcpy()
+    }
+
+    // Copy Assignment Operator
+    MyString& operator=(const MyString& other) {
+        if (this != &other) {
+            delete[] data;  // Clean up existing data
+
+            data = new char[std::strlen(other.data) + 1];
+            std::strcpy(data, other.data);
+
+            // OR:
+            // MyString temp(other);
+            // std::swap(data, temp.data);    // OR EVEN: std::swap(*this, temp);
+        }
+        return *this;
+    }
+
+    // Move Constructor
+    MyString(MyString&& other) noexcept : size(other.size), data(other.data) {  // no const, since it's already rvalue
+        // so when other is deleted attribes of 'this' (which now share memory) won't get affected
+        other.data = nullptr;
+        // done to Prevent Double Deletion: After moving data from other to this, both this and other would point to the same memory. When other is destroyed, its destructor would attempt to delete[] data
+    }
+
+    // Move Assignment Operator
+    MyString& operator=(MyString&& other) noexcept {
+        if (this != &other) {
+            delete[] data;
+
+            size = other.size;
+            data = other.data;
+
+            other.data = nullptr;
+
+            // OR:
+            // std::swap(size, other.size);
+            // std::swap(data, other.data);
+        }
+
+        return *this;
+    }
+};
+
+
+int main() {
+    MyString s1("Hello");
+
+    MyString s2 = s1;  // copy constructor
+    MyString s3(std::move(s1));  // move constructor
+
+    MyString s4;
+    s4 = s2;  // copy assignment
+    s4 = std::move(s3);  // move assignment
+
+    return 0;
+}
+```
+
+By declaring a function as `noexcept`, you inform the compiler (and anyone reading the code) that the function will not throw an exception under any circumstances.
+
+## Reference collapsing
+
+**Reference collapsing** dictates how references behave when combined, especially when working with template parameters.
+
+Reference Type $\rightarrow$ Result:
+
+- & + & = &
+- & + && (&& + &) = &
+- && + && = &&
+
+```cpp
+template <typename T>
+void foo(T&& arg) {
+    bar(std::forward<T>(arg));
+}
+
+void bar(int& x) {};
+
+void bar(int&& x) {};
+
+int x = 10;
+foo(x);             // T becomes int&
+foo(std::move(x))   // T becomes int
+foo(5);             // T becomes int
+```
+
+This allows for **perfect forwarding** with `std::forward` that preserves the value category (lvalue or rvalue) of an argument.
+
+`std::remove_reference` strips references (& or &&) and gives just the type T.
+
+```cpp
+#include <type_traits>
+
+template <typename T>
+T&& forward(typename std::remove_reference<T>::type& param) {   // implementation of the std::forward function template
+    return static_cast<T&&>(param);
+}
+```
+
+`static_cast` - compile-time cast for safe, well-defined conversions between types.
+
+## Type deduction
+
+```cpp
+int a = 10;
+decltype(a) b = 20;  // int
+auto c = 30;         // int
+```
+
+Type deduction determines the type of a variable or template parameter automatically, based on the context.
+
+# Lecture 6 - Dynamic Memory Allocation
+
+### UB
+
+After freeing variable all pointers to it are trash - UB.
+
+```cpp
+int* invalid_pointer() {
+    int x;
+    return &x;
+}
+```
+
+## Types of C++ memory
+
+### static/global memory
+
+- allocated at start of program and deallocated at the end
+- not limited by scope
+
+Syntax: `static` keyword or global scope
+
+### stack memory
+
+- static memory allocation at compile time
+- automatically freed and lifetime is limited to scope
+- mapped continously in memory
+
+### heap memory
+
+- dynamic memory allocation at runtime
+- requires manual management
+- **fragmentation** and indirect access
+
+Syntax: `new T` or `new T(args)`, `delete p`; `new T[n]` and `delete[] p`.  
+_Each_ `new` should have it's `delete`.
+
+Modern OS reclaim memory when the program ends, including any dynamically allocated memory on the heap.
+
+new (C++) $\rightarrow$ malloc (C) $\rightarrow$ mmap (asm)
+
+## Array overhead
+
+**Array overhead** is `std::size_t` stored (in memory) before array as metadata for size of array.  
+That's how `delete []` knows how much to deallocate.  
+!!!NO!!! it's not like that: see "akos10.2 Pointer Meta Info"
+
+The metadata is managed internally by the memory allocator, and it is not exposed to the user, so I can't access size of array.
+
+If many small arrays are allocated, the overhead can accumulate and become a problem. Can be solved using **memory pools** or single contiguous allocation managed manually.
+
+```cpp
+struct T {
+    int i;
+    ~T() {};    // !!
+};
+
+T* create_T(const std::size_t& n) {
+    return new T[n];
+}
+
+void destroy_T(T* p) {
+    delete[] p;
+}
+```
+
+## Placement `new`
+
+Specifies _pre-allocated_ memory address for an object at a specific memory address.
+
+```cpp
+alignas(T) char buffer[sizeof(T)];
+
+T* obj = new (buffer) T(42);    // constructs T at buffer's address
+
+obj->~T();                      // destructor
+```
+
+Use `alignas` for ensuring proper memory alignment with object's type.
+
+**Placement** `new` does not allocate memory, so do _not_ use `delete` to free it.
+
+## Causes of memory leaks
+
+```cpp
+{
+    int* ptr = new int{5};  // 1. not freeing
+}
+
+int* ptr1 = new int{5};
+ptr1 = new int{6};          // 2. losing references
+```
+
+There are some others like: circular references, ...
+
+## Fragmentation
+
+**Fragmentation** occurs due to the way dynamic memory allocation is handled by the standard heap allocator.
+
+### External fragmentation
+
+When free memory is scattered in small blocks across the heap, making it difficult to allocate large contiguous memory blocks, even if the total free memory is sufficient.
+
+```txt
+[Allocated] [Free] [Allocated] [Free] [Allocated]
+```
+
+### Internal fragmentation
+
+When memory allocated to a program is larger than what the program actually needs, resulting in wasted space within allocated blocks.
+
+For example - because of **alignment requirement** extra unused space is allocated.
+
+## Allocation
+
+There are a lot of different allocators.  
+Here presented basic ones.
+
+### Linear allocation (dynamic)
+
+Memory is allocated sequentially in a contiguous block.
+
+`+` fast and simple, minimizes external fragmentation.  
+`-` no deallocation; memory must be reset in bulk.
+
+### Stack allocation (static)
+
+(!= memory on stack)
+
+When a function is called, memory for local variables is allocated on the stack. When the function returns, the stack frame is automatically deallocated.
+
+Since stack $\rightarrow$ uses **LIFO**.
+
+**Padding** (in stack allocation) - extra space added between variables or within structures to satisfy alignment requirements.
+
+```cpp
+struct Example {
+    char a;     // 1 byte
+    int b;      // 4 bytes (requires 4-byte alignment)
+    char c;     // 1 byte
+};
+// Padding:
+// 3 bytes after 'a' to align 'b'
+// 3 bytes after 'c' to align the structure size.
+```
+
+Total size of `struct` should be a multiple of the largest alignment requirement of its members.  
+It needs for ensuring that when array of Example structs is created, each struct starts at an address aligned to the highest alignment requirement.
+
+### Pool Allocation (dynamic)
+
+Memory is allocated from a pre-allocated pool of fixed-size blocks, rather than allocating memory directly from the system heap.
+
+### std::allocator
+
+`std::allocator` is a default allocator in cpp unless a custom allocator is specified.
+
+In performance-critical applications, custom allocators for **performance tuning** can be used to improve allocation performance or control memory layout.
+
+```cpp
+template <typename T>
+struct allocator {
+    T* allocate(std::size_t);
+    void deallocate(T*, std::size_t);
+    void constructor(T*, args);
+    void destroy(T*);
+}
+```
+
+# Lecture 7 - Smart Pointers
+
+## RAII
+
+**Resource Acquisition Is Initialization (RAII)** is a key C++ idiom where resource management is tied to the lifecycle of an object.
+
+Example of RAII without using smart pointers:
+
+```cpp
+class FileWrapper {
+    FILE* file;
+public:
+    FileWrapper(const char* filename, const char* mode) {
+        file = fopen(filename, mode);
+        if (!file) {
+            throw std::runtime_error("Failed to open file");
+        }
+    }
+
+    ~FileWrapper() {
+        if (file) {
+            fclose(file);  // Resource is released when object is destroyed
+        }
+    }
+
+    FILE* get() const { return file; }
+};
+```
+
+Smart pointers automatically handle the deallocation of memory when the pointer goes out of scope.
+
+## std smart pointers
+
+## `std::unique_ptr`
+
+- Ownership Model: Owns a resource exclusively. No other unique_ptr can manage the same resource.
+- Move-Only: unique_ptr cannot be copied, only moved, to transfer ownership.
+- Memory Management: Calls delete on the managed object when it goes out of scope.
+
+```cpp
+std::unique_ptr<int> ptr = std::make_unique<int>(10);
+```
+
+### with arrays
+
+```cpp
+std::unique_ptr<int[]> arr(new int[10]);
+
+std::shared_ptr<int> arr(new int[10], std::default_delete<int[]>());
+```
+
+### deleter
+
+You have to set delete for arrays:
+
+```cpp
+std::unique_ptr<int[]> arr(new int[5]{1, 2, 3, 4, 5}, std::default_delete<int[]>());
+```
+
+You can create custom deleter:
+
+```cpp
+void customArrayDeleter(int* p) {
+    std::cout << "Custom deleter called for array" << '\n';
+    delete[] p;
+}
+
+std::unique_ptr<int[], decltype(&customArrayDeleter)> arr(new int[5]{1, 2, 3, 4, 5}, customArrayDeleter);
+```
+
+### class initialization
+
+Since `std::unique_ptr` is non-copyable, you can't pass it by value, but you can pass it by rvalue reference or by `std::move`ing it into the constructor.
+
+```cpp
+class MyClass {
+public:
+    MyClass(std::unique_ptr<int> p) : ptr(std::move(p)) {}
+private:
+    std::unique_ptr<int> ptr;
+};
+```
+
+## `std::shared_ptr`
+
+- Ownership Model: Allows multiple smart pointers to share ownership of a single resource.
+- Thread-Safe: The reference count is managed in a thread-safe manner to allow use in multithreaded programs.
+
+Uses a **control block** of:
+
+- Reference count
+- Weak count
+
+When the reference count drops to zero, the resource is deallocated, but the control block persists until the weak count reaches zero, ensuring weak_ptr instances can still check for the resource's validity.
+
+```cpp
+std::shared_ptr<int> shared1 = std::make_shared<int>(20);
+std::shared_ptr<int> shared2 = shared1;
+```
+
+### deleter
+
+```cpp
+void customArrayDeleter(int* p) {
+    std::cout << "Custom deleter called for array\n";
+    delete[] p;
+}
+
+std::shared_ptr<int> arr(new int[5]{1, 2, 3, 4, 5}, customArrayDeleter);
+```
+
+### `std::enable_shared_from_this`
+
+Problem:
+
+```cpp
+class MyClass {
+public:
+    std::shared_ptr<MyClass> getShared() {
+        return std::shared_ptr<MyClass>(this);  // Incorrect!
+    }
+    ~MyClass() {
+        std::cout << "MyClass destroyed\n";
+    }
+};
+
+int main() {
+    std::shared_ptr<MyClass> ptr1 = std::make_shared<MyClass>();
+    std::shared_ptr<MyClass> ptr2 = ptr1->getShared();  // Separate reference count!
+
+    // `ptr1` and `ptr2` will try to delete `MyClass` separately, leading to undefined behavior
+    return 0;
+}
+```
+
+The way:
+
+```cpp
+class MyClass : public std::enable_shared_from_this<MyClass> {
+public:
+    std::shared_ptr<MyClass> getShared() {
+        return shared_from_this();  // Uses the existing control block
+    }
+
+    ~MyClass() {
+        std::cout << "MyClass destroyed\n";
+    }
+};
+
+int main() {
+    std::shared_ptr<MyClass> ptr1 = std::make_shared<MyClass>();
+    std::shared_ptr<MyClass> ptr2 = ptr1->getShared();  // Both share the same reference count
+
+    std::cout << "Reference count: " << ptr1.use_count() << '\n';  // Should output 2
+
+    // `MyClass` will only be destroyed once when the last shared_ptr goes out of scope
+    return 0;
+}
+```
+
+Avoid calling shared_from_this() in constructor, because it will cause UB since the control block is not yet fully set up.
+
+## `std::weak_ptr`
+
+- Non-Owning Reference: Does not increase the reference count.
+- Deletion: Gets deleted when last owning pointer was deleted.
+- Observation: Can observe and access the resource managed by shared_ptr without owning it.
+
+Uses `lock()` to create a _temporary_ shared_ptr that increments the reference count if the resource is still available.
+
+# Lecture 8 - OOP
+
+Definition $\rightarrow$ Declaration $\rightarrow$ Initialization
+
+## name lookup
+
+### unqulified (~~::~~) name lookup
+
+Global & Static $\rightarrow$ Namespace $\rightarrow$ { Block } $\rightarrow$ Class/Struct
+
+```cpp
+std::string_view x = "global";
+
+namespace N {
+    auto x = "namespace";
+
+    void f() {
+        auto x = "function";
+        {
+            std::string x = "block";
+        }
+    }
+}
+```
+
+### qulified (::) name lookup
+
+```cpp
+const static int x = 5;
+
+namespace N {
+    struct A {
+        struct B {
+            const static int x = 10;
+        };
+    };
+}
+
+int main() {
+    const int x = 3;
+
+    std::cout << N::A::B::x;    // 10
+    std::cout << ::x;           // 5
+}
+```
+
+## Anonymous Namespace
+
+- namespace without a name:
+
+```cpp
+namespace {
+    int x = 1;
+}
+```
+
+- static:
+
+```cpp
+static const int x = 1;
+```
+
+Variables from them can be accessed only _within_ the file they are declared.
+
+## Inheritance
+
+```cpp
+class Animal {
+public:
+    void makeSound() const {
+        std::cout << "Some generic animal sound" << '\n';
+    }
+};
+
+class Dog : public Animal {
+public:
+    void makeSound() const {
+        std::cout << "Woof!" << '\n';
+    }
+};
+```
+
+### Multiple Inheritance
+
+```cpp
+class Clickable { ... };
+class Rectangle { ... };
+
+class Button : public Clickable, public Rectangle { ... };
+```
+
+## Access Modifiers
+
+```cpp
+class A {
+public:     // to all
+    ...
+protected:  // to inheritors
+    ...
+private:    // to this and friends
+    ...
+}
+```
+
+### Inheritance Semantics
+
+When a class inherits privately, all public and protected members of the base class become private members of the derived class.
+
+- `public` — interface inheritance
+- `private` — implementation inheritance (better to use composition)
+- `protected` — practically unused
+
+```cpp
+class FancyVector : private std::vector<int> {
+public:
+    void PushBackTwo(int x, int y) {
+        push_back(x);
+        push_back(y);
+    }
+};
+```
+
+## Casting
+
+- `static_cast` — Used for standard type conversions between related types
+
+- `dynamic_cast` — Used for safe casting of pointers/references in inheritance hierarchies. Checks the validity of the cast at runtime and can only be used with polymorphic types (classes with at least one virtual function).
+
+- `const_cast` — Used to add or remove `const` qualifiers from a variable.
+
+- `reinterpret_cast` — Used for low-level casting, allowing you to cast one type to an unrelated type (e.g., pointer to an integer).
+
+## Polymorphism
+
+### Static Polymorphism
+
+- Defining multiple functions with the same name but different parameters
+- **Operator Overloading**
+
+### Dynamic Polymorphism
+
+- **virtual** & **override**: Functions that are declared in a base class and overridden in derived classes:
+
+```cpp
+class Animal {
+public:
+    virtual void makeSound() const {
+        std::cout << "Some generic animal sound" << '\n';
+    }
+    virtual void Action() = 0;  // derived classes HAVE to implement this
+};
+
+class Dog : public Animal {
+public:
+    void makeSound() const override {
+        std::cout << "Woof!" << '\n';
+    }
+    void Action() override {
+        Bite();
+    };
+};
+```
+
+# Lecture 9 - Exceptions
+
+Don't use exceptions like if-else, because they are very costly and not scalable - they mutex::lock thread while gathering cache info if exception occur.
+
+## Different ways of handling
+
+```cpp
+std::abort();   // to kill execution
+```
+
+```cpp
+std::expected<T, E>;    // like std::variant<...>
+```
+
+The best practice:
+
+```cpp
+void F() {
+    try {
+        throw std::runtime_error("FOO");
+    } catch (const std::logic_error&) {
+        // This block is skipped because std::runtime_error is not a logic_error
+    } catch (const std::runtime_error&) {
+        // Land here <-- std::runtime_error matches exactly
+    } catch (const std::exception&) {
+        // This block is skipped because the runtime_error is already caught
+    }
+}
+```
+
+## Custom exception
+
+```cpp
+class MyException : public std::exception {
+private:
+    const char* message;
+public:
+    MyException(const char* msg) : message(msg) {}
+
+    const char* what() const noexcept override {
+        return message;
+    }
+};
+```
+
+## Derived exception
+
+```cpp
+class FileException : public std::exception {
+    const char* what() const noexcept override {
+        return "File exception occurred";
+    }
+};
+```
+
+# Lecture 10 - Object Memory Layout
+
+## Standard Layout Type
+
+**POD (Plain Old Data)** $\rightarrow$ // C++11 // $\rightarrow$ **Standard Layout Type**
+
+Requirements for Standard Layout Types:
+
+- no virtual functions or inherit from a virtual base class.
+
+- all non-static data members must have the same access control (e.g., all public, all private).
+
+- no non-static members of base class:
+
+- single inheritance only
+
+- if a class has non-static data members, they must align properly with respect to the base class (no unexpected gaps in memory layout).
+
+- members must not introduce unexpected overlaps in memory.
+
+Standard Layout Types ensure compatibility between C++ and C.
+
+## Alignment (Padding)
+
+```cpp
+struct MyStruct {
+    char a;    // 1 byte
+    int b;     // 4 bytes
+    short c;   // 2 bytes
+};
+
+std::cout << sizeof(MyStruct) << std::endl; // Output may be 12 (with padding)
+```
+
+To change padding:
+
+```cpp
+#pragma pack(push, n) // Save current alignment and set new alignment to 'n'
+#pragma pack(n)       // Set new alignment to 'n'
+#pragma pack(pop)     // Restore the previous alignment
+```
+
+```cpp
+#pragma pack(push, 1) // Set 1-byte alignment
+struct MyStruct {
+    char a;    // 1 byte
+    int b;     // 4 bytes
+    short c;   // 2 bytes
+};
+#pragma pack(pop) // Restore default alignment
+
+std::cout << sizeof(MyStruct) << std::endl; // Output: 7 (no padding)
+```
+
+```cpp
+struct MyStruct {
+    char a;
+    int b;
+};
+
+sizeof(MyStruct);       // Output: 8
+alignof(int);           // Output: 4
+offsetof(MyStruct, b);  // Output: 4
+```
+
+### `alignas`
+
+C++11 and later:
+
+```cpp
+struct alignas(1) MyStruct {
+    char a;
+    int b;
+    short c;
+};
+```
+
+Using `alignas(1)` (or `#pragma pack(1)`) to minimize memory usage comes with slower memory access: CPU has to perform extra work to read or write **misaligned** data.
+
+### `std::aligned_storage` and Placement New
+
+`std::aligned_storage` provides raw, untyped memory with a specified size and alignment.
+
+```cpp
+template<class T>
+class FixedContainer {
+public:
+    std::aligned_storage_t<sizeof(T), alignof(T)> storage;
+
+    void construct(const T& value) {
+        new (&storage) T(value);    // placement new
+    }
+};
+```
+
+## Referencing members
+
+```cpp
+int A::* ptr = &A::x;
+
+a.*ptr;
+a_ptr->*ptr;
+```
+
+## Inlining
+
+Inlining (literally) of function content into code [when the compiler optimizes it] could:
+
+1. improve speed of execution: since no need for addressing function & creating separate scope
+2. worsen speed of execution: the larger executable file - the harder for OS to cache it to layers.
+
+Different levels of optimization:
+
+```bash
+clang -O0 my_program.c
+clang -O2 my_program.c
+```
+
+### `inline`
+
+Originally, `inline` suggested to the compiler to replace a function call with the actual code of the function, removing the need for a call and return sequence.
+
+However, modern compilers automatically optimize code and decide whether to `inline` a function based on heuristics.  
+This makes its role as a performance hint less relevant today.
+
+For functions defined inside a class definition, the compiler treats them as `inline` by default.
+
+Modern use of `inline` is to allow function definitions in header files without violating the **One Definition Rule (ODR)**.
+
+## `#define`
+
+`#define` can be used to:
+
+```cpp
+#define PI 3.14159                  // symbolic constants
+#define SQUARE(x) ((x) * (x))       // macros that look like functions but involve direct text substitution (no type safety)
+
+#ifndef MY_HEADER_H                 // include guards
+#define MY_HEADER_H
+// Header content
+#endif // MY_HEADER_H
+```
+
+## Different stages of compilation
+
+```bash
+clang -E my_program.c                   # preprocessed code
+clang -P -E my_program.c                # -P to suppress the generation of line markers, (e.g., # 1 "file.c" lines) in the output
+clang -emit-llvm -S my_program.c        # LLVM Intermediate Representation, which is an intermediate step between source code and machine code
+clang -S my_program.c                   # assembly code
+```
+
+### Object files
+
+When compiling C(++), the compiler produces .o files.  
+These object files contain machine code (binary instructions) generated from your source code, but they are not standalone executables.  
+Object files are intermediate files that are later linked together to create an executable or library.
+
+```bash
+clang -c my_program.c -o my_program.o
+
+objdump -d my_program.o
+```
+
+```bash
+clang -c a.cpp b.cpp c.cpp              # producing solo .o files
+clang a.o b.o c.o                       # linking - final stage of compiling
+./a.out
+```
+
+# Lecture 11 - gdb
+
+## Basics
+
+Let's say our program is:
+
+```cpp
+int main() {
+    std::vector<int> vec_name = {1, 2, 3, 4, 5};
+    return 0;
+}
+```
+
+```bash
+clang++ -g -O0 example_gdb.cpp      # to compile with debag & zero optimization level
+
+gdb ./a.out
+```
+
+```gdb
+info functions
+info functions main
+
+info variables
+info locals                     # variables in a current function
+
+break main()                    # set a breakpoint for function
+info breakpoints
+
+run                             # runs program until: crashes || end || breakpoint
+start                           # runs program until the beginning of `main` function (or equivalent)
+
+info frame                      # name of the current function you're in
+
+# next - goes to following line
+# step - goes into current line if there is inner function, else does next
+# next, step (n, s) - for actual code (c++, rust, ...)
+next
+step
+
+whatis vector_name              # will print the type
+ptype vector_name               # will print the type in detail
+
+print vector_name
+print vector_name.size()
+print\d vector_name.size()      # decimal
+print vector_name.empty()
+print &vector_name              # for example, gives address = 0x7fffffffdae0
+```
+
+### No debugging symbols
+
+```gdb
+# nexti, stepi (ni, si) - for asm;
+nexti
+stepi
+
+context
+
+info registers                  # `info locals`: No symbol table info available.
+
+disassemble                     # assembly code for the current function
+x/45i $pc                       # shows the next 45 instructions starting from the current instruction pointer ($pc)
+
+print/d $rax
+```
+
+## Examine memory
+
+Examine memory: x/FMT ADDRESS
+Format letters are:
+
+- o(octal)
+- x(hex)
+- d(decimal)
+- u(unsigned decimal)
+- t(binary)
+- f(float)
+- a(address)
+- i(instruction)
+- c(char)
+- s(string)
+- z(hex, zero padded on the left)
+
+Size letters are: b(byte), h(halfword), w(word), g(giant, 8 bytes).
+
+```gdb
+x/3xw 0x7fffffffdae0            # 3 memory addresses from 0x7fffffffdae0 in xw format
+# OUTPUT:
+0x7fffffffdae0: 0x004172b0      0x00000000      0x004172c4
+# 0x004172b0 - Pointer to the data buffer
+
+x/4dw 0x004172b0
+# OUTPUT - exact values of vector:
+0x4172b0:       1      2       3       4
+
+set *(int*)0x004172b0 = 10
+set *((int*)0x004172b0 + 1) = 20
+
+x/4dw 0x004172b0
+# OUTPUT:
+0x4172b0:       10     20      3       4
+
+set *(int*)(0x7fffffffdae0) = 1
+p vec_name
+# OUTPUT:
+$3 = std::vector of length 1072305, capacity 1072305 = {Cannot access memory at address 0x0}
+# which now leads to Segmentation Fault
+```
+
+## Conditional breakpoints
+
+```cpp
+void print_numbers(int limit) {
+    int j;
+    for (int i = 0; i < limit; ++i) {
+        if (i % 2) {
+            j = i;
+        }
+
+        std::cout << "Number: " << i << '\n';
+    }
+}
+
+int main() {
+    print_numbers(10);
+    return 0;
+}
+```
+
+```gdb
+break print_numbers
+condition 1 i == 5              # condition to the breakpoint
+
+run
+print i
+# OUTPUT:
+$1 = 5
+```
+
+### No debugging symbols
+
+```gdb
+break *0x0000555555400662
+condition 1 $esi == 90000
+```
+
+### Watch
+
+```gdb
+start
+next
+
+watch j
+continue
+continue
+continue
+```
+
+## Core dumps
+
+**Core dump** - snapshot of the program's state (program's memory [heap, stack, global variables], processor registers) of a running program at a specific point in time when the program crashes.
+
+```bash
+gdb /path/to/executable /path/to/coredump
+```
+
+When analyzing a core dump with GDB, you usually want to inspect the state of the program at the time of the crash, without needing to restart it.
+
+Common causes: segmentation faults, illegal instructions, or invalid memory access.
+
+```cpp
+int div(int a, int b) {
+    return a / b;
+}
+
+int main() {
+    div(1, 0);
+    return 0;
+}
+```
+
+```bash
+clang++ -g -O0 example_gdb.cpp -o core_dump_example.out
+./core_dump_example.out                                     # Floating point exception (core dumped)
+
+ls /var/lib/systemd/coredump/
+mv /var/lib/systemd/coredump/
+
+sudo mv /var/lib/systemd/coredump/core.core_dump_examp.1000.429bb74afb9e4a21ba0abbfc96caa5b2.235604.1733034544000000.zst core_dump
+
+gdb core_dump_example.out core_dump
+```
+
+```gdb
+backtrace
+
+info locals
+info args
+
+list                        # code around the crash
+```
+
+# Lecture 11.2 - OSI model
+
+## OSI Model - Layers and Protocols
+
+The **Open Systems Interconnection (OSI)** model is a reference model from the **International Organization for Standardization (ISO)** that partitions the flow of data in a communication system into 7 abstraction layers to describe networked communication:
+
+### 1. Physical Layer
+
+- Hardware transmission of raw bits (0s and 1s) over a physical medium.
+- Concerned with the physical connection between devices (e.g., cables, switches, and wireless signals).
+
+---
+
+### 2. Data Link Layer
+
+- Error-free transmission of data from one node to another over the physical layer.
+- Responsible for framing, addressing, and error detection.
+
+Examples: Ethernet (802.3), Wi-Fi (802.11), Bluetooth.
+
+#### Sub-layers
+
+- **Media Access Control (MAC)**: Controls access to the physical transmission medium.
+- **Logical Link Control (LLC)**: Manages frame synchronization and error checking.
+
+---
+
+### 3. Network Layer
+
+- **Routing** of data packets between devices across multiple networks.
+- Ensures data reaches the correct destination using logical addressing (IP addresses).
+
+Key Concepts:
+
+- **IP Addressing**: Assigns logical addresses to devices.
+- **Routing**: Determines the best path for data.
+- **Fragmentation**: Breaks down data packets for transmission if they're too large.
+
+Examples: Internet Protocol (IPv4, IPv6), ICMP (for ping).
+
+---
+
+### 4. Transport Layer
+
+- Provides end-to-end communication and ensures reliable or efficient data transfer.
+- Manages segmentation, acknowledgment, and flow control.
+
+Key Concepts:
+
+### TCP
+
+**TCP** (Transmission Control Protocol) is a _connection-oriented_ protocol designed to provide _reliable_ (data integrity) communication in _correct order_ with between devices.
+
+- Resends lost or corrupted packets (error correction).
+
+- Higher overhead due to connection setup, acknowledgments, and error correction.
+
+Use cases:
+
+- HTTP/HTTPS (web browsing)
+- FTP (file transfers)
+- SMTP/IMAP/POP3 (emails)
+
+### UDP
+
+**UDP** (User Datagram Protocol) is a _connectionless_ protocol designed for _low-latency_ and time-sensitive (may be not reliable & ordered) communication.
+
+- No handshake or connection establishment is required.
+
+Use cases:
+
+- DNS lookups
+- Video streaming
+- Online gaming
+
+### DNS
+
+**DNS** (Domain Name System) - Internet's "phonebook", translating domain names (e.g., google.com) into IPv4 | IPv6.
+
+When you type a URL (e.g., www.example.com) into your browser:
+
+- **TLD** (Top-Level Domain): .com
+- **SLD** (Second-Level Domain): example
+- **Subdomain**: www
+
+1. DNS Query Initiated
+
+2. Checking local DNS cache
+
+3. **Recursive DNS Resolver**:
+
+    If the local cache doesn't have the address, the request goes to a DNS resolver (often provided by your ISP or a public DNS service like Google or Cloudflare).
+
+4. **Root Servers**:
+
+    If the resolver doesn’t have the answer, it queries one of the root servers, which directs the query to the appropriate TLD server (e.g., .com).
+
+5. **TLD Servers**: TLD server points the resolver to the authoritative server for the specific domain.
+
+6. **Authoritative DNS Server**: Provides the IP address of the domain.
+
+### URI & URL
+
+**URI** (Uniform Resource Identifier) is a string used to identify a resource on the internet.
+
+URIs often come in the form of **URLs** (Uniform Resource Locators), which specify the location of the resource and the protocol used to access it (e.g., HTTP or HTTPS).
+
+---
+
+### 5. Session Layer
+
+- Manages and controls the dialog between two devices.
+- Ensures that sessions remain open and data is synchronized.
+
+Key Concepts:
+
+- Session establishment, maintenance, and termination.
+- Synchronization: Reestablishing sessions after interruptions.
+
+Examples: APIs for maintaining sessions (e.g., sockets).
+
+---
+
+### 6. Presentation Layer
+
+- Translates data between the application and network formats.
+- Ensures data is in a readable format for the receiving application.
+
+Key Concepts:
+
+- Data Encoding/Decoding: Formats such as ASCII, JPEG, MP3.
+- Encryption/Decryption: Securing data during transmission.
+
+Examples: SSL/TLS for secure data presentation, data compression.
+
+---
+
+### 7. Application Layer
+
+- Closest to the end-user and directly interacts with software applications.
+- Provides services such as file transfers, email, and remote login.
+
+Key Concepts:
+
+- Protocols for specific services: HTTP for web, FTP for file transfers, SMTP for email.
+- User Interfaces: Applications that rely on network communication.
+
+Examples: Web browsers (HTTP/HTTPS), email clients (SMTP, IMAP, POP3).
+
+---
+
+### Real-World Example: Sending an Email
+
+1. Application Layer: You compose an email in an email client.
+2. Presentation Layer: Data is formatted and encrypted.
+3. Session Layer: A session is established with the mail server.
+4. Transport Layer: TCP ensures email data is transmitted reliably.
+5. Network Layer: Email is routed across multiple networks to the destination server.
+6. Data Link: Ensures error-free transmission over local network.
+7. Physical Layer: Converts data to electrical signals for transmission.
+
+## IP address:port
+
+**IP address** (Internet Protocol address) is a numerical label assigned to each device connected to a network that uses the Internet Protocol for communication.
+
+It serves two primary purposes:
+
+1. **Identification**: Identifies a unique device on a network.
+2. **Location**: Provides the device's location within the network.
+
+Versions of IP addresses:
+
+1. **IPv4**: Uses a 32-bit address space, providing approximately \(2^{32}\) (around 4.3 billion) unique addresses, formatted as `xxx.xxx.xxx.xxx` (e.g., `192.168.1.1`).
+2. **IPv6**: Uses a 128-bit address space, providing \(2^{128}\) addresses, which is an astronomically large number, formatted as eight groups of four hexadecimal digits (e.g., `2001:0db8:85a3:0000:0000:8a2e:0370:7334`).
+
+---
+
+**Port** - to differentiate services running on a single device.
+
+A device can have a single IP address but run multiple services (e.g., web server, email server, etc.), and ports allow communication to be directed to the right service.
+
+- Ports range from **0 to 65535**.
+- Some well-known ports:
+  - **80**: HTTP (web traffic)
+  - **443**: HTTPS (secure web traffic)
+  - **22**: SSH (secure shell)
+
+### **How Do We Avoid Running Out of IP Addresses?**
+
+#### For IPv4
+
+1. **Private IP Addresses and NAT (Network Address Translation)**:
+
+   - **Private IP ranges** (e.g., `192.168.x.x`, `10.x.x.x`) are not routable on the internet and are reused across private networks.
+   - A single public IP address can serve multiple devices in a private network by using NAT, which maps private IPs to a single public IP for external communication.
+
+2. **Dynamic IP Allocation**:
+
+   - Internet Service Providers (ISPs) often use **Dynamic Host Configuration Protocol (DHCP)** to assign IPs temporarily from a pool of addresses, optimizing usage.
+
+3. **IPv4 Exhaustion Workarounds**:
+   - Use of **Carrier-Grade NAT (CGNAT)** by ISPs.
+   - Encouraging the adoption of IPv6.
+
+#### For IPv6
+
+- The address space is so large (\(2^{128}\)) that running out is practically impossible.
+- It eliminates the need for NAT, simplifying address allocation.
+
+## `nc` NetCat (for TCP & UDP)
+
+Basic syntax:
+
+```bash
+nc [options] [hostname] [port]
+```
+
+1. Establishing TCP | UDP connections (Connect to a specific host and port)
+
+    ```bash
+    nc example.com 80
+    ```
+
+    "Establishing a UDP connection" is a linguistic simplification or abstraction, because UDP is connectionless.
+
+2. Simple web request (Send a raw HTTP request)
+
+    ```bash
+    nc example.com 80
+    GET / HTTP/1.1
+    Host: example.com
+    ```
+
+    Press `Enter` twice to complete the request.
+
+3. Open port scanning
+
+    ```bash
+    nc -zv example.com 20-80
+    ```
+
+4. File Transfer
+
+    ```bash
+    nc -l -p 1234 < file.txt        # Server side (send a file)
+    nc server_ip 1234 > file.txt    # Client side (receive a file)
+    ```
+
+5. Chat Between Two Machines
+
+    ```bash
+    nc -l -p 1234                   # Server side (set up a chat server)
+    nc server_ip 1234               # Client side (connect to the server)
+    ```
+
+6. Create a TCP/UDP Server
+
+    ```bash
+    nc -l -p 1234                   # TCP
+    nc -l -u -p 1234                # UDP
+
+    # from another terminal to send http request
+    curl -i "http://localhost:12345/p/a/t/h?text=cats&query=dogs"
+    ```
+
+## API
+
+**Application Programming Interface (API)** - set of rules and protocols that allow for contract between a client (like an application or a service) and a server (another application or service).
+
+Types of APIs:
+
+- Web APIs
+- Library APIs (in a programming language)
+- Operating System APIs (e.g., Windows API, POSIX API)
+
+**Endpoint** - Specific URL where the API can be accessed.
+
+Common HTTP methods:
+
+- GET: Retrieve data.
+- POST: Submit data.
+- PUT: Update data.
+- DELETE: Remove data.
+
+### POCO C++ library
+
+POCO (Portable Components) is ideal for building efficient, lightweight C++ applications that require: robust networking, multithreading, and data processing capabilities.
+
+Alternatives:
+
+- Boost: Offers a broader range of functionality but might feel heavier.
+- Qt: Provides GUI features along with similar functionalities but targets more graphical applications.
+
+# Lecture 12 - Undefined behavior
+
+Behaviors of C++ Standard:
+
+1. implementation-defined
+2. unspecified
+3. undefined
+
+## Implementation-defined
+
+**Implementation-defined behavior**: defined (documented) by the compiler but may vary across compilers.
+
+```cpp
+int main() {
+    int x = -5;
+    unsigned int y = 3;
+    std::cout << x % y << std::endl; // the standard allows compilers to decide how modulo works with negative numbers
+}
+```
+
+## Unspecified behavior
+
+**Unspecified behavior** occurs when the C++ Standard allows multiple valid outcomes for a given construct, but it does not mandate which one will happen in a specific scenario.  
+The program remains well-formed, but the exact result is not guaranteed.
+
+```cpp
+int x = 1, y = 2;
+int z = foo(x++, y++); // The order of evaluation of `x++` and `y++` is unspecified.
+```
+
+## Undefined behavior
+
+**Undefined Behavior** (UB) is unpredictable and not specified by the C++ standard.  
+It occurs when the program violates the rules of the language, such as accessing out-of-bounds memory, dereferencing null pointers, or dividing by zero.
+
+UB means the C++ standard imposes no requirements on what happens when UB is encountered: results can vary, including crashes, incorrect outputs, or seemingly correct behavior.
+
+Sometimes a compiler can throw UB, but sometimes it doesn't and code somehow runs even though it has UB.
+
+### Example
+
+A compiler may optimize based on the assumption that UB does not exist in the code.
+
+```cpp
+int square(int n) {
+    for (int i = 0; ; i += 3) {
+        if (i == n * n) {
+            return i;
+        }
+    }
+}
+
+int main() {
+    std::cout << square(3);     // seemingly correct behavior: 9, even though it did no looping
+    std::cout << square(10);    // incorrect output: 100 ! even though with +=3 10 can't be reached
+    return 0;
+}
+```
+
+Disassemble of it with `-O1`:
+
+```asm
+square(int):
+        imul    edi, edi
+        imul    rax, rdi, 1431655766
+        shr     rax, 32
+        lea     eax, [rax + 2*rax]
+        ret
+```
+
+Compiler knows that infinite loop is UB, so there is only 1 option in trying to avoid it: return n * n without doing loop.  
+But it's still UB, that's why in case of UB behavior is unpredictable.
+
+## Passing by value
+
+This code in asm does the loop fully with accessing vec.size each time.  
+This happens, because compiler gives possibility to vec.size be changed while looping.
+
+```cpp
+struct Vector {
+    int* arr;
+    int size;
+};
+
+void foo(Vector& vec) {
+    for (std::size_t i = 0; i < vec.size; ++i) {
+        vec.arr[i] = 0;
+    }
+}
+```
+
+Following code in asm just uses `memset` for whole array once, because size isn't changed and it's clear, thus it is very optimized:
+
+```cpp
+struct Vector {
+    int* arr;
+    int size;
+};
+
+void foo(Vector& vec) {
+    int size = vec.size;
+
+    for (std::size_t i = 0; i < size; ++i) {
+        vec.arr[i] = 0;
+    }
+}
+```
+
+# Lecture 13 - Design patterns
+
+Types of Patterns:
+
+- Creational: abstract the process of instance creation
+- Structural: organizing classes and objects to form larger structures
+- Behavioral: delegate responsibilities and manage communication between objects
+
+## Creational: Factory
+
+Hide the logic of object creation, and clients use the factory interface to get the object instead of instantiating it directly.
+
+Benefits:
+
+- **Loose coupling**: components or modules of a system are minimally dependent on each other.
+- **Single Responsibility Principle**: delegates the creation logic to the factory.
+- **Open/Closed Principle**: makes the code open to extension but closed to modification.
+
+### Structure
+
+1. Product:  
+    The interface or abstract base class for objects the factory will create.
+
+    ```cpp
+    class Button {
+    public:
+        virtual void render() = 0;
+        virtual ~Button() = default;
+    };
+    ```
+
+2. ConcreteProduct:  
+    The specific implementation of the Product.
+
+    ```cpp
+    class WindowsButton : public Button { ... };
+
+    class MacOSButton : public Button { ... };
+    ```
+
+3. Creator:  
+    Declares the factory method which returns a Product object.
+
+    ```cpp
+    class Dialog {
+    public:
+        virtual Button* createButton() = 0;
+        virtual ~Dialog() = default;
+    };
+    ```
+
+4. ConcreteCreator:  
+    Overrides the factory method to create specific ConcreteProduct objects.
+
+    ```cpp
+    class WindowsDialog : public Dialog {
+    public:
+        Button* createButton() override {
+            return new WindowsButton();
+        }
+    };
+
+    class MacOSDialog : public Dialog {
+    public:
+        Button* createButton() override {
+            return new MacOSButton();
+        }
+    };
+    ```
+
+Client:
+
+```cpp
+void renderUI(Dialog* dialog) {
+    Button* button = dialog->createButton();
+    button->render(); // Use the button without knowing its concrete type
+    delete button;
+}
+
+int main() {
+    Dialog* dialog = new WindowsDialog();
+    renderUI(dialog);
+    delete dialog;
+
+    dialog = new MacOSDialog();
+    renderUI(dialog);
+    delete dialog;
+
+    return 0;
+}
+```
+
+## Creational: Abstract Factory
+
+Create families of related or dependent objects without specifying their concrete classes.
+
+Adding new families of products requires only the addition of new factory and product classes, leaving existing code unchanged.
+
+Additional benefits:
+
+- **Encapsulation**: Hides the creation logic for a family of related objects.
+- Consistency: Ensures all created objects are part of the same family
+
+### Difference from Factory Method
+
+Factory method focuses on creating a *single* product through a method that subclasses can override to decide which concrete class to instantiate.
+
+### Structure
+
+1. Abstract Product:  
+    Defines the interface for product objects.
+
+    ```cpp
+    class Button {
+    public:
+        virtual void render() = 0;
+        virtual ~Button() = default;
+    };
+
+    class Checkbox {
+    public:
+        virtual void check() = 0;
+        virtual ~Checkbox() = default;
+    };
+    ```
+
+2. Concrete Product:  
+    Implements the abstract product interface for a specific variant.
+
+    ```cpp
+    class WindowsButton : public Button { ... };
+    class WindowsCheckbox : public Checkbox { ... };
+
+    class MacOSButton : public Button { ... };
+    class MacOSCheckbox : public Checkbox { ... };
+    ```
+
+3. Abstract Factory:  
+    Declares creation methods for each product family.
+
+    ```cpp
+    class GUIFactory {
+    public:
+        virtual Button* createButton() = 0;
+        virtual Checkbox* createCheckbox() = 0;
+        virtual ~GUIFactory() = default;
+    };
+    ```
+
+4. Concrete Factory:  
+    Implements creation methods for specific product families.
+
+    ```cpp
+    class WindowsFactory : public GUIFactory {
+    public:
+        Button* createButton() override {
+            return new WindowsButton();
+        }
+        Checkbox* createCheckbox() override {
+            return new WindowsCheckbox();
+        }
+    };
+
+    class MacOSFactory : public GUIFactory {
+    public:
+        Button* createButton() override {
+            return new MacOSButton();
+        }
+        Checkbox* createCheckbox() override {
+            return new MacOSCheckbox();
+        }
+    };
+    ```
+
+Client:
+
+```cpp
+class Application {
+private:
+    GUIFactory* factory;
+    Button* button;
+    Checkbox* checkbox;
+
+public:
+    Application(GUIFactory* f) : factory(f) {
+        button = factory->createButton();
+        checkbox = factory->createCheckbox();
+    }
+
+    void renderUI() {
+        button->render();
+        checkbox->check();
+    }
+
+    ~Application() {
+        delete button;
+        delete checkbox;
+    }
+};
+
+int main() {
+    // Example: Using WindowsFactory
+    GUIFactory* factory = new WindowsFactory();
+    Application* app = new Application(factory);
+    app->renderUI();
+
+    delete app;
+    delete factory;
+
+    return 0;
+}
+```
+
+## Creational: Singleton
+
+Ensures that"
+
+1. only one instance of a class exists
+2. provides a global access to the instance
+
+Used in managing shared resources (configuration, settings, logging, database connections).
+
+```cpp
+struct Singleton {
+    static Singleton& getInstance() {
+        static Singleton instance;
+        return instance;
+    }
+
+private:
+    Singleton();
+    ~Singleton() = default;
+
+    Singleton(const Singleton&) = delete;
+    Singleton& operator=(const Singleton&) = delete;
+
+    Singleton(Singleton&&) = delete;
+    Singleton& operator=(Singleton&&) = delete;
+};
+```
+
+### LeakySingleton
+
+LeakySingleton is never explicitly destroyed, so it "leaks" the instance intentionally, ensuring it outlives all other static objects.  
+The operating system reclaims the memory when the program exits.
+
+```cpp
+class LeakySingleton {
+public:
+    static LeakySingleton& getInstance() {
+        static LeakySingleton* instance = new LeakySingleton(); // Dynamically allocate
+        return *instance;
+    }
+
+    void doSomething() const {
+        std::cout << "LeakySingleton is working!" << std::endl;
+    }
+
+private:
+    LeakySingleton();
+    ~LeakySingleton() { std::cout << "LeakySingleton Destructor will never be used" << std::endl; }
+
+    LeakySingleton(const LeakySingleton&) = delete;
+    LeakySingleton& operator=(const LeakySingleton&) = delete;
+    LeakySingleton(LeakySingleton&&) = delete;
+    LeakySingleton& operator=(LeakySingleton&&) = delete;
+};
+```
+
+## Structural: Adapter
+
+Allows incompatible interfaces to work together by providing a bridge (adapter) between them.
+
+Adapter: Converts Adaptee's interface to Target's interface.
+
+```cpp
+// Existing class with incompatible interface
+struct Adaptee {
+    void specificRequest();
+};
+
+// Target interface expected by the client
+struct Target {
+    virtual void request() const = 0;
+    virtual ~Target() = default;
+};
+
+struct Adapter : public Target {
+    Adapter(Adaptee* a) : adaptee(a) {}
+
+    void request() const override {
+        std::cout << "Adapter: Translating request...\n";
+        adaptee->specificRequest(); // Call the Adaptee's method
+    }
+private:
+    Adaptee* adaptee;
+};
+```
+
+## Creational: Decorator
+
+Dynamically add behavior to objects at runtime without modifying their structure.
+
+```cpp
+class Coffee {...};
+
+class ConcreteCoffee : public Coffee {...};
+
+// Base Decorator
+class CoffeeDecorator : public Coffee {
+protected:
+    std::shared_ptr<Coffee> coffee;
+
+public:
+    CoffeeDecorator(std::shared_ptr<Coffee> c) : coffee(std::move(c)) {}
+    virtual ~CoffeeDecorator() = default;
+};
+
+// Concrete Decorators
+class MilkDecorator : public CoffeeDecorator {
+public:
+    MilkDecorator(std::shared_ptr<Coffee> c) : CoffeeDecorator(std::move(c)) {}
+
+    double cost() const override {
+        return coffee->cost() + 1.5; // Add cost for milk
+    }
+};
+
+class SugarDecorator : public CoffeeDecorator {
+public:
+    SugarDecorator(std::shared_ptr<Coffee> c) : CoffeeDecorator(std::move(c)) {}
+
+    double cost() const override {
+        return coffee->cost() + 0.5; // Add cost for sugar
+    }
+};
+
+int main() {
+    // Base coffee
+    std::shared_ptr<Coffee> myCoffee = std::make_shared<SimpleCoffee>();
+    myCoffeeWithSugar = std::make_shared<SugarDecorator>(myCoffee);
+    myCoffeeWithSugarAndMilk = std::make_shared<MilkDecorator>(myCoffeeWithSugar);
+
+    return 0;
+}
+```
+
+## Behavioral: some
+
+- Strategy: Encapsulates interchangeable algorithms.
+- Observer: Notifies dependent objects of changes.
+- Command: Encapsulates a request as an object.
+- State: Allows an object to change behavior when its state changes.
+- Mediator: Centralizes communication between objects.
