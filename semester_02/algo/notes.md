@@ -8,7 +8,7 @@ Idea: skip over parts of the text that have already been examined.
 
 **Proper** prefix/suffix of a string - any prefix/suffix of the string except the string itself.
 
-### LPS
+### LPS (Longest Prefix Suffix)
 
 In the **LPS (Longest Prefix Suffix)** array, we compare proper prefixes of the pattern with its suffixes to find repeating patterns.
 
@@ -68,7 +68,7 @@ bool KMPSearch(const std::string &text, const std::string &pattern) {
 
 ## Z-function
 
-### Naive
+### Naive: LCP (Longest Common Prefix)
 
 ```cpp
 size_t LongestCommonPrefixFromIndex(const std::string& str, size_t index) {
@@ -144,22 +144,24 @@ struct SearchResult {
     size_t index;
 };
 
-// PrefixTree
-struct TrieNode {
-    std::unordered_map<char, TrieNode*> children;
-    TrieNode* failure;
+// PrefixTree built in O(\sum{patterns})
+struct AhoCorasick {
+    std::unordered_map<char, AhoCorasick*> children;
+    AhoCorasick* failure;
     std::vector<std::string> words;
 
-    TrieNode() {}
+    AhoCorasick() {}
 
-    TrieNode(const std::vector<std::string>& strs) {
-        for (const std::string& str : strs) {
+    AhoCorasick(const std::vector<std::string>& patterns) {
+        for (const std::string& str : patterns) {
             Insert(str);
         }
+
+        BuildFailureLinks();
     }
 
     void BuildFailureLinks() {
-        std::queue<TrieNode*> que;
+        std::queue<AhoCorasick*> que;
         failure = this;
 
         for (auto [_, child] : children) {
@@ -168,11 +170,11 @@ struct TrieNode {
         }
 
         while (!que.empty()) {
-            TrieNode* front = que.front();
+            AhoCorasick* front = que.front();
             que.pop();
 
             for (auto [chr, node] : front->children) {
-                TrieNode* fail = front->failure;
+                AhoCorasick* fail = front->failure;
 
                 while (fail != this &&
                        fail->children.find(chr) == fail->children.end()) {
@@ -194,10 +196,10 @@ struct TrieNode {
         }
     }
 
-    std::vector<SearchResult> SearchWithinText(const std::string& text) {
+    std::vector<SearchResult> SearchWithinText(const std::string& text) {+
         std::vector<SearchResult> results;
 
-        TrieNode* node = this;
+        AhoCorasick* node = this;
 
         for (size_t i = 0; i < text.size(); ++i) {
             char chr = text[i];
@@ -222,11 +224,11 @@ struct TrieNode {
 
 private:
     void Insert(const std::string& str) {
-        TrieNode* cur = this;
+        AhoCorasick* cur = this;
 
         for (char chr : str) {
             if (cur->children.find(chr) == cur->children.end()) {
-                cur->children[chr] = new TrieNode();
+                cur->children[chr] = new AhoCorasick();
             }
 
             cur = cur->children[chr];
@@ -236,16 +238,14 @@ private:
     }
 };
 
-std::vector<SearchResult> AhoCorasick(const std::vector<std::string>& words,
-                                      const std::string& text) {
-    TrieNode* root = new TrieNode(words);
-    root->BuildFailureLinks();
+int main() {
+    AhoCorasick* root = new AhoCorasick({"abc", "abde", "bcd"});
 
-    return root->SearchWithinText(text);
+    std::vector<SearchResult> result = root->SearchWithinText("abcde");
 }
 ```
 
-# Lecture 3 - Suffix Tree
+# Lecture 3 - Suffix Tree (Ukkonen)
 
 **Task**: $P$ in $T$ $\to$ index.
 
@@ -254,7 +254,7 @@ Idea:
 1. Preprocess: construct Suffix Tree of all substrings of $T$
 2. Query: find $P$ there.
 
-## Naive approach: Trie of Suffixes
+## Naive approach
 
 Substring $\equiv$ prefix of suffix of string.
 
@@ -264,14 +264,14 @@ Trie of all substrings of $T$ $\equiv$ Trie of all suffixes of $T$.
 
 But to bild Trie of all suffixes it takes $O(T^2)$ $\to$ to do it in $O(T)$ use Ukkonen.
 
-## Ukkonen
+## Ukkonen's Suffix Tree
 
 ![alt text](images_for_notes/suffix_tree_01.png)
 ![alt text](images_for_notes/suffix_tree_02.png)
 
-- A - continuation of list
+- A - continuation of list (implicit location)
 
-- B - creating a new leaf vertex from:
+- B - creating a new leaf vertex (explicit location) from:
   - 2: explicit
   - 3: implicit location
 
@@ -279,3 +279,86 @@ But to bild Trie of all suffixes it takes $O(T^2)$ $\to$ to do it in $O(T)$ use 
 
 ---
 
+code
+
+# Lecture 4.1 - Radix Sort
+
+Radix Sort sorts by digits, not by comparisons.
+
+It’s efficient for integers and has $O(nk)$ time complexity, where $n$ is number of elements and $k$ is number of digits.
+
+Steps:
+
+1. Find the maximum number of digits in the largest number.
+
+2. Starting from the least significant digit, group numbers into "buckets" (0–9) based on the current digit.
+
+3. Reassemble the list from the buckets.
+
+4. Repeat the process for each digit position.
+
+It usually uses **Counting Sort** as a stable subroutine for sorting digits.
+
+## Example
+
+Sort [170, 45, 75, 90, 802, 24, 2, 66]
+
+1. unit digit: [170, 90, 802, 2, 24, 45, 75, 66]
+2. tens: [802, 2, 24, 45, 66, 170, 75, 90]
+3. hundreds: [2, 24, 45, 66, 75, 90, 170, 802]
+
+# Lecture 4 - Suffix Array (KMR & Karkkainen-Sanders)
+
+**Suffix array** - sorted array of all suffixes of a string.
+
+![alt text](images_for_notes/suffix_array_idea.png)
+
+So we have suffix array that represents (if turned into suffixes):
+
+```txt
+[
+    a
+    aba
+    abacaba
+    acaba
+    ba
+    bacaba
+    caba
+]
+```
+
+And we can literally do **binary search** within this suffix array.
+
+## KMR (Karp-Miller-Rosenberg)
+
+$O(T \log T)$ time because $1 \to 2 \to 4 \to \dots \to T$ and at each step calculation of $A^k$ by $O(T)$.
+
+![alt text](images_for_notes/kmr.png)
+
+$A^1$ is calculated using **Counting Sort**:
+
+![alt text](images_for_notes/a_1.png)
+
+All other $A^k$ calculated using concatination with $A^\frac{k}{2}$ results using Radix Sort
+
+![alt text](images_for_notes/a_k.png)
+
+## Karkkainen-Sanders
+
+$O(n)$ time using a divide and conquer by:
+
+1. Splitting suffixes into mod 3 groups
+
+2. Recursively sorting the 2/3 group with triplets
+
+3. Sorting the rest using those ranks (Radix Sort)
+
+4. Merging both in lexicographic order
+
+> Reduced problem size is ~2n/3, which allows for linear recursion.
+
+![alt text](images_for_notes/karkkainen_sanders.png)
+
+# Lecture 5 - LCP Array
+
+ 

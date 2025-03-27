@@ -511,14 +511,18 @@ auto add = [a, &b](int x) {
 ```cpp
 inc i = 0;
 
-void count = [cnt = i]() {
+auto count = [cnt = i]() {
     ++cnt;      // error
 };
 
-void count = [cnt = i]() mutable {
+auto count = [cnt = i]() mutable {
     ++cnt;
 };
 ```
+
+### why `auto`?
+
+C++ doesn't have a lambda type because lambdas are implemented as **anonymous (unnamed) closure classes**, so their types are often complex and compiler-generated, making them difficult to explicitly specify.
 
 ## Higher-Order Functions
 
@@ -1200,6 +1204,14 @@ class Clickable { ... };
 class Rectangle { ... };
 
 class Button : public Clickable, public Rectangle { ... };
+```
+
+### `final`
+
+`final` = "No further inheritance allowed"
+
+```cpp
+class ExecutionContext final : private ITrampoline { ... }
 ```
 
 ## Access Modifiers

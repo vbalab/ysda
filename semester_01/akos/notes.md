@@ -849,6 +849,7 @@ It contrasts with pipes, which are suitable for sequential, stream-based communi
 
 # Lecture 6 - Cache Layers
 
+![alt text](images_for_notes/caching.png)
 CPU operates with virtual addresses.
 
 The **memory controller** on a CPU is responsible for managing the flow of data between the CPU and the main memory (RAM).
@@ -877,6 +878,10 @@ Location:
 - L4 is located near CPU on separate chip
 
 ## Cache levels
+
+<img src="images_for_notes/cache_layers.png" width="400"/>
+
+![alt text](images_for_notes/cache_layers2.png)
 
 ### L1 (16-64 KB)
 
@@ -934,16 +939,73 @@ A cache with k-way set associativity and n total lines will have n/k sets.
 Pros: Balances flexibility and simplicity.
 Cons: Some cache lines may go unused.
 
-## MSI (Modified, Shared, Invalid)
+## MESI (Modified, Exclusive, Shared, Invalid)
 
-**MSI** protocol is a cache coherence protocol used in multi-core CPUs to maintain consistency across caches:
+**Cache coherence** - multiple cached copies of the same memory location remain consistent, such that all processors observe writes to that location in a consistent order.
 
-- Modified: cache line is exclusive to one cache and has been modified (written to).  
-If another core needs it, this cache must write it back.
-- Shared: cache line is unchanged and may be shared among multiple caches, matching the main memory.
-- Invalid: either because it's unused or because another core modified it.
+[Great visualization of MESI in dynamic](https://www.scss.tcd.ie/jeremy.jones/vivio/caches/ALL%20protocols.htm)
+
+**MESI** protocol is a cache coherence protocol used in multi-core CPUs to maintain consistency across caches.
+
+- Modified (M): Cache line is valid and modified (dirty). This copy is the only valid one.
+
+- Exclusive (E): The cache line is clean, held only in this cache, and matches main memory.
+
+    1. If this CPU writes to it → transitions to Modified without notifying others.
+
+    2. If another CPU reads → becomes Shared in both.
+
+- Shared (S): Cache line is clean and possibly present in other caches.
+
+- Invalid (I): Cache line is not valid.
+
+### Why invalidate at all? (and not just update)
+
+1. Traffic Efficiency:
+
+    - Invalidate: Only one **broadcast** ("I'm writing, invalidate this line").
+
+    - Update: You must send the entire data value to every cache holding the line.
+
+2. Writes are often followed by more writes and with Invalidate we broadcast only once first time.
+
+## False sharing
+
+<img src="images_for_notes/false_sharing.png" width="400"/>
 
 **False sharing** - when multiple threads on different CPU cores access different variables that happen to be stored in the same cache line: any update by one thread marks the entire cache line as "modified" or invalidates it in other cores.
+
+### Solution
+
+```cpp
+constexpr size_t kCacheLineSize = std::hardware_destructive_interference_size;
+```
+
+1. **Padding**
+
+    ```cpp
+    struct KeepOnSeparateCacheLines {
+        std::atomic<int32_t> counter;
+        char padding[kCacheLineSize - sizeof(std::atomic<int32_t>)];
+    };
+    ```
+
+2. `alignas` - better!
+
+    ```cpp
+    struct alignas(kCacheLineSize) KeepOnSeparateCacheLines {
+        std::atomic<int32_t> counter;
+    };
+    ```
+
+    OR
+
+    ```cpp
+    struct KeepOnSeparateCacheLines {
+        alignas(kCacheLineSize) std::atomic<int32_t> counter1;
+        alignas(kCacheLineSize) std::atomic<int32_t> counter2;
+    };
+    ```
 
 ---
 
@@ -1377,8 +1439,13 @@ It is algorithmic stack.
 
 Stack memory stores:
 
-- Function call information (return addresses, parameters).
-- Local variables (declared within a function's scope).
+- Function call information (return address, parameters).
+
+- Local variables (declared within a function's scope):  
+    All local variables are stored as offsets from the frame/base pointer — usually the `%rbp` register on x86_64.
+
+    First few local variables could be stored directly in registers of a function's stack frame.
+
 - Control flow information (e.g., stack frames for function calls).
 
 **LIFO**:
@@ -1386,8 +1453,45 @@ Stack memory stores:
 - Memory for a function is "pushed" onto the stack when it is called.
 - When the function exits, its memory is "popped" from the stack.
 
-Fast Allocation/Deallocation: Memory operations on the stack are highly efficient.  
+Fast Allocation/Deallocation: Memory operations on the stack are highly efficient.
+
+### Stack Overflow
+
 The stack is typically much smaller than the heap. Large allocations could exhaust stack space and cause a **stack overflow**.
+
+Most systems have a stack size limit per thread:
+
+- Linux: 8 MB
+- macOS: 8 MB
+- Windows: 1 MB
+
+This would lead to stack overlow:
+
+1. a lot of function calls:
+
+    ```cpp
+    int foo(i) {
+        if (i == 4'000'000) {
+            return i;
+        }
+
+        return foo(i + 1)
+    }
+
+    foo(0)
+    ```
+
+    $\to$ use loops instead of recursion
+
+2. a lot of local variables:
+
+    ```cpp
+    void foo() {
+        int big_array[4'000'000]; // 16 MB
+    }
+    ```
+
+    $\to$ use heap memory instead of stack memory
 
 ## 3. Heap Memory
 

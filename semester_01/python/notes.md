@@ -1264,7 +1264,7 @@ def main_generator():
 
 ### Generator State Management (send, close, throw)
 
-https://chatgpt.com/c/679bc147-3394-8010-9972-ae958a909980
+<!-- https://chatgpt.com/c/679bc147-3394-8010-9972-ae958a909980 -->
 
 ### Generator as Coroutine
 
