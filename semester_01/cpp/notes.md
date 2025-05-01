@@ -1,4 +1,4 @@
-<!-- markdownlint-disable MD025, MD001, MD024 -->
+<!-- markdownlint-disable MD024 MD049 -->
 
 # Set up
 
@@ -170,9 +170,13 @@ Otherwise use `'\n'`;
 
 ---
 
-int overflow - UB: could result in anything from crashing the program to returning a wrapped-around value, depending on C++ version and computer architecture.
+`int` overflow - UB: could result in anything from crashing the program to returning a wrapped-around value, depending on C++ version and computer architecture.
 
-uint overflow - well-defined and causes the value to wrap around.
+`uint` overflow - well-defined and causes the value to wrap around.
+
+---
+
+By definition of signed integer: `-a == (~a) + 1`
 
 # Lecture 1
 
@@ -402,6 +406,19 @@ void print(T t, int u) {
 }
 ```
 
+### Promotion
+
+**Promotion** - special case of conversion: larger but similar type.
+
+Promotion preffered to conversion:
+
+```cpp
+void f(int);
+void f(double);
+
+f(2f); // `float` -> promotion -> `double`
+```
+
 ## `template`
 
 ```cpp
@@ -601,38 +618,127 @@ for (auto x: vec | std::views::filter([](int x) { return x % 2 == 0; })
 }
 ```
 
-# Lecture 5 - Move semantics
+# Lecture 5 - Move Semantics
 
 ## lvalue & rvalue
 
-**lvalue** (locator value):
+Object **has identity** if:
 
-- object that has an address
-- referenced by `&`
+1. it occupies a distinct region of storage in memory _and_
+2. persists beyond a single expression.
 
-**rvalue** (right value):
+Object **can be moved** if:
 
-- temporary object or value that does not have a persistent memory address (literals or the result of an arithmetic operation)
-- referenced by `&&`
+1. It has a move constructor or move assignment operator defined (either explicitly or implicitly) _and_
 
-rvalue allow the transfer of resources (!) from temporary objects, reducing unnecessary copying.
+2. The object is used in a context that allows moving — i.e., it’s an rvalue or xvalue (e.g., `std::move(x)`).
 
-`std::move()`: lvalue $\rightarrow$ rvalue, enabling the move semantics.  
-Typically used when passing an lvalue to a function expecting an rvalue.
+> If no move constructor is defined, the compiler may _fall back_ to a **copy**.
+
+### Value Categories
+
+1. **glvalue** = lvalue || xvalue:
+
+    - **lvalue** — named object in memory (has identity, persistent storage)
+
+    ```cpp
+    int x = 5;
+    int& ref = x;
+    x;          // lvalue
+    ref;        // lvalue
+    ```
+
+    - xvalue
+
+2. **rvalue** = prvalue || xvalue:
+
+    - **prvalue** — pure temporary value, no identity
+
+    ```cpp
+    42;                 // prvalue
+    std::string("hi");  // prvalue
+    x + y;              // prvalue if x, y are ints
+    ```
+
+    - xvalue
+
+3. **xvalue** = glvalue (has identity) && rvalue (can be moved) — movable, _expiring object_:
+
+    ```cpp
+    std::move(x);  // xvalue
+    a[0];          // xvalue if a is std::vector<T>
+    ```
+
+#### `++`
+
+- `++a` $\leftarrow$ lvalue;
+
+- `a++` $\leftarrow$ rvalue (creates a copy, does increment to `a`, returns copy);
+
+### `std::move`
+
+- See "can be moved" definition.
 
 ```cpp
-class SMTH {
-public:
-    SMTH(int&& value) : value_(value) {}
-private:
-    int value_;
+template<typename T>
+constexpr typename std::remove_reference<T>::type&& move(T&& t) noexcept {
+    return static_cast<typename std::remove_reference<T>::type&&>(t);
+}
+// The cast to `&&` takes Move Constructor OR Move Assignment Operator depending on context
+```
+
+Objects that can't be moved (and no copy will be taken) (CE):
+
+1. deleted move constructors
+
+2. holding resources that cannot be transferred (e.g., certain OS handles)
+
+3. `const` — since you can’t modify (move from) them
+
+#### Funny `std::move`
+
+```cpp
+struct Thing {
+    int val;
+
+    Thing(Thing&& other) noexcept {
+        val = 100;    // funny, and std::move will be funny
+        // value = std::move(other.value); nope))
+        other.val = 10;
+    }
 };
 
-int a = 2;
-SMTH b = SMTH(a);   // error
-SMTH b = SMTH(2);   // ok
-SMTH b = SMTH(std::move(a));   // ok
+Thing t1(0);
+Thing t2 = std::move(t1); // invokes move constructor
+// t1.val == 10
+// t2.val == 100
+// LOL
 ```
+
+## lvalue to rvalue conversion
+
+```cpp
+x = y;
+// x.operator=(static_cast<T>(y));  // what really happens
+```
+
+- x — **LHS** — modifiable (non-const) lvalue
+- y — **RHS** — lvalue-to-rvalue conversion applies
+
+**lvalue-to-rvalue conversion**: If an lvalue expression is used in RHS, it is converted to a _prvalue_.
+
+```cpp
+int a = 10;
+int b = a;      // lvalue-to-rvalue conversion
+int c = a + b   // lvalue-to-rvalue conversion of both `a` and `b`
+
+void g(int);
+g(a);           // lvalue-to-rvalue conversion
+
+int& ref = a;   // no conversion
+```
+
+> Don't confuse with `std::move` that casts it to _xvalue_ && moves when you do `x = std::move(y)`
 
 ## Rule of 3, 5, 0
 
@@ -668,6 +774,7 @@ public:
     }
 
     // Copy Assignment Operator
+    // since it results in `Class&` as return type -> `(x = y) = z` is the same as `(x = z)`
     MyString& operator=(const MyString& other) {
         if (this != &other) {
             delete[] data;  // Clean up existing data
@@ -725,7 +832,26 @@ int main() {
 
 By declaring a function as `noexcept`, you inform the compiler (and anyone reading the code) that the function will not throw an exception under any circumstances.
 
-## Reference collapsing
+## Construction Delegation
+
+**Delegating constructor** $\to$ constructor.
+
+```cpp
+struct Header {
+    uint8_t version;
+    uint8_t command;
+    uint16_t port;
+    uint32_t ip;
+
+    Header(uint16_t port, uint32_t ip) : version(4), command(1), port(port), ip(ip) {
+    }
+
+    Header(const cactus::SocketAddress& endpoint) : Header(endpoint.GetPort(), endpoint.GetIp()) {  // constructor delegation
+    }
+};
+```
+
+## Reference Collapsing
 
 **Reference collapsing** dictates how references behave when combined, especially when working with template parameters.
 
@@ -751,22 +877,22 @@ foo(std::move(x))   // T becomes int
 foo(5);             // T becomes int
 ```
 
-This allows for **perfect forwarding** with `std::forward` that preserves the value category (lvalue or rvalue) of an argument.
-
 `std::remove_reference` strips references (& or &&) and gives just the type T.
+
+### `std::forward`
 
 ```cpp
 #include <type_traits>
 
 template <typename T>
-T&& forward(typename std::remove_reference<T>::type& param) {   // implementation of the std::forward function template
+T&& forward(typename std::remove_reference<T>::type& param) {
     return static_cast<T&&>(param);
 }
 ```
 
-`static_cast` - compile-time cast for safe, well-defined conversions between types.
+This allows for **perfect forwarding** with `std::forward` that preserves the value category (lvalue or rvalue) of an argument.
 
-## Type deduction
+## Type Deduction
 
 ```cpp
 int a = 10;
@@ -778,18 +904,23 @@ Type deduction determines the type of a variable or template parameter automatic
 
 # Lecture 6 - Dynamic Memory Allocation
 
-### UB
+## Dangling Reference (UB)
 
-After freeing variable all pointers to it are trash - UB.
+After freeing variable all pointers to it are trash.
 
 ```cpp
-int* invalid_pointer() {
-    int x;
+int& f() {
+    int x = 0;
+    return x;
+}
+
+int* f() {
+    int x = 0;
     return &x;
 }
 ```
 
-## Types of C++ memory
+## Types of C++ Memory
 
 ### static/global memory
 
@@ -1088,24 +1219,10 @@ public:
     std::shared_ptr<MyClass> getShared() {
         return shared_from_this();  // Uses the existing control block
     }
-
-    ~MyClass() {
-        std::cout << "MyClass destroyed\n";
-    }
 };
-
-int main() {
-    std::shared_ptr<MyClass> ptr1 = std::make_shared<MyClass>();
-    std::shared_ptr<MyClass> ptr2 = ptr1->getShared();  // Both share the same reference count
-
-    std::cout << "Reference count: " << ptr1.use_count() << '\n';  // Should output 2
-
-    // `MyClass` will only be destroyed once when the last shared_ptr goes out of scope
-    return 0;
-}
 ```
 
-Avoid calling shared_from_this() in constructor, because it will cause UB since the control block is not yet fully set up.
+Avoid calling `shared_from_this()` in constructor, because it will cause UB since the control block is not yet fully set up.
 
 ## `std::weak_ptr`
 
@@ -1247,13 +1364,75 @@ public:
 
 ## Casting
 
-- `static_cast` — Used for standard type conversions between related types
+### 1. `static_cast<T>(expr)`
 
-- `dynamic_cast` — Used for safe casting of pointers/references in inheritance hierarchies. Checks the validity of the cast at runtime and can only be used with polymorphic types (classes with at least one virtual function).
+- Compile-time type conversion
+- safe-ish
+- _checks types_
 
-- `const_cast` — Used to add or remove `const` qualifiers from a variable.
+- UB if used incorrectly
 
-- `reinterpret_cast` — Used for low-level casting, allowing you to cast one type to an unrelated type (e.g., pointer to an integer).
+```cpp
+int i = 42;
+float f = static_cast<float>(i);      // OK
+
+Base* b = new Derived();
+Derived* d = static_cast<Derived*>(b); // OK if you're sure
+```
+
+### 2. `reinterpret_cast<T>(expr)`
+
+- Bit-level reinterpretation of memory.
+- Ignores types completely
+
+- May violate strict aliasing ($\to$ UB)
+
+```cpp
+int* ip = new int(42);
+char* cp = reinterpret_cast<char*>(ip); // View int memory as bytes
+```
+
+### 3. `dynamic_cast<T>(expr)`
+
+- Safe RTTI-based cast for polymorphic types.
+
+- Returns `nullptr` on failure (for pointers)
+- Throws `std::bad_cast` (for references)
+- Only works if the base class has at least one `virtual` function
+
+Use it for:
+
+- Downcasting polymorphic pointers
+- Checking cast validity at runtime
+
+```cpp
+Base* b = new Derived();
+Derived* d = dynamic_cast<Derived*>(b); // ✅ Works if actually Derived*
+```
+
+Counter-example:
+
+```cpp
+struct A {};                // ❌ No virtual functions
+struct B : A {};
+A* a = new B;
+B* b = dynamic_cast<B*>(a); // Compile error!
+```
+
+### 4. `const_cast<T>(expr)`
+
+- Adds or removes `const` / `volatile` qualifiers.
+
+- Modifying a `const` object $\to$ UB
+
+```cpp
+const int x = 10;
+int* px = const_cast<int*>(&x); // ⚠️ Legal, but modifying is UB
+
+void func(char* p);
+const char* s = "hello";
+func(const_cast<char*>(s)); // OK if func doesn’t write to s
+```
 
 ## Polymorphism
 
@@ -1267,15 +1446,16 @@ public:
 - **virtual** & **override**: Functions that are declared in a base class and overridden in derived classes:
 
 ```cpp
-class Animal {
+// `I` - interface
+class IAnimal {
 public:
     virtual void makeSound() const {
         std::cout << "Some generic animal sound" << '\n';
     }
-    virtual void Action() = 0;  // derived classes HAVE to implement this
+    virtual void Action() = 0;  // derived classes HAVE to implement this; `IAnimal` can't be initialized
 };
 
-class Dog : public Animal {
+class Dog : public IAnimal {
 public:
     void makeSound() const override {
         std::cout << "Woof!" << '\n';
@@ -1285,6 +1465,10 @@ public:
     };
 };
 ```
+
+`= 0` makes a virtual function **pure virtual** — any subclass must implement this function.  
+With `= 0` virtual class can't be initialized.  
+It turns the class into an **abstract base class**.
 
 # Lecture 9 - Exceptions
 
@@ -1461,9 +1645,9 @@ clang -O2 my_program.c
 
 ### `inline`
 
-Originally, `inline` suggested to the compiler to replace a function call with the actual code of the function, removing the need for a call and return sequence.
+Originally, `inline` suggested to the compiler to replace a function call with the actual code of the function, removing the need for doing stack call of function.
 
-However, modern compilers automatically optimize code and decide whether to `inline` a function based on heuristics.  
+However, modern compilers automatically optimize code and decide whether to inline a function based on heuristics.  
 This makes its role as a performance hint less relevant today.
 
 For functions defined inside a class definition, the compiler treats them as `inline` by default.
@@ -1511,7 +1695,7 @@ clang a.o b.o c.o                       # linking - final stage of compiling
 ./a.out
 ```
 
-# Lecture 11 - gdb
+# Lecture 11.1 - gdb
 
 ## Basics
 
@@ -1718,11 +1902,14 @@ list                        # code around the crash
 
 ## OSI Model - Layers and Protocols
 
-The **Open Systems Interconnection (OSI)** model is a reference model from the **International Organization for Standardization (ISO)** that partitions the flow of data in a communication system into 7 abstraction layers to describe networked communication:
+**Open Systems Interconnection (OSI)** model - reference model from the **International Organization for Standardization (ISO)** that partitions the flow of data in a communication system into 7 abstraction layers to describe networked communication:
+
+Each layer talks _only_ to the one above and below it — this makes systems **modular**.
 
 ### 1. Physical Layer
 
-- Hardware transmission of raw bits (0s and 1s) over a physical medium.
+- Hardware transmission of raw bits over a physical medium.
+
 - Concerned with the physical connection between devices (e.g., cables, switches, and wireless signals).
 
 ---
@@ -1730,27 +1917,18 @@ The **Open Systems Interconnection (OSI)** model is a reference model from the *
 ### 2. Data Link Layer
 
 - Error-free transmission of data from one node to another over the physical layer.
+
 - Responsible for framing, addressing, and error detection.
 
 Examples: Ethernet (802.3), Wi-Fi (802.11), Bluetooth.
-
-#### Sub-layers
-
-- **Media Access Control (MAC)**: Controls access to the physical transmission medium.
-- **Logical Link Control (LLC)**: Manages frame synchronization and error checking.
 
 ---
 
 ### 3. Network Layer
 
 - **Routing** of data packets between devices across multiple networks.
+
 - Ensures data reaches the correct destination using logical addressing (IP addresses).
-
-Key Concepts:
-
-- **IP Addressing**: Assigns logical addresses to devices.
-- **Routing**: Determines the best path for data.
-- **Fragmentation**: Breaks down data packets for transmission if they're too large.
 
 Examples: Internet Protocol (IPv4, IPv6), ICMP (for ping).
 
@@ -1759,15 +1937,12 @@ Examples: Internet Protocol (IPv4, IPv6), ICMP (for ping).
 ### 4. Transport Layer
 
 - Provides end-to-end communication and ensures reliable or efficient data transfer.
-- Manages segmentation, acknowledgment, and flow control.
-
-Key Concepts:
 
 ### TCP
 
-**TCP** (Transmission Control Protocol) is a _connection-oriented_ protocol designed to provide _reliable_ (data integrity) communication in _correct order_ with between devices.
+**TCP** (Transmission Control Protocol) - *connection-oriented* protocol designed to provide *reliable* (data integrity) communication in *correct order* with between devices.
 
-- Resends lost or corrupted packets (error correction).
+- Resends lost or corrupted packets (**error correction**).
 
 - Higher overhead due to connection setup, acknowledgments, and error correction.
 
@@ -1779,7 +1954,7 @@ Use cases:
 
 ### UDP
 
-**UDP** (User Datagram Protocol) is a _connectionless_ protocol designed for _low-latency_ and time-sensitive (may be not reliable & ordered) communication.
+**UDP** (User Datagram Protocol) - *connectionless* protocol designed for *low-latency* and time-sensitive (may be not reliable & ordered) communication.
 
 - No handshake or connection establishment is required.
 
@@ -1789,35 +1964,9 @@ Use cases:
 - Video streaming
 - Online gaming
 
-### DNS
-
-**DNS** (Domain Name System) - Internet's "phonebook", translating domain names (e.g., google.com) into IPv4 | IPv6.
-
-When you type a URL (e.g., www.example.com) into your browser:
-
-- **TLD** (Top-Level Domain): .com
-- **SLD** (Second-Level Domain): example
-- **Subdomain**: www
-
-1. DNS Query Initiated
-
-2. Checking local DNS cache
-
-3. **Recursive DNS Resolver**:
-
-    If the local cache doesn't have the address, the request goes to a DNS resolver (often provided by your ISP or a public DNS service like Google or Cloudflare).
-
-4. **Root Servers**:
-
-    If the resolver doesn’t have the answer, it queries one of the root servers, which directs the query to the appropriate TLD server (e.g., .com).
-
-5. **TLD Servers**: TLD server points the resolver to the authoritative server for the specific domain.
-
-6. **Authoritative DNS Server**: Provides the IP address of the domain.
-
 ### URI & URL
 
-**URI** (Uniform Resource Identifier) is a string used to identify a resource on the internet.
+**URI** (Uniform Resource Identifier) - string used to identify a resource on the internet.
 
 URIs often come in the form of **URLs** (Uniform Resource Locators), which specify the location of the resource and the protocol used to access it (e.g., HTTP or HTTPS).
 
@@ -1826,21 +1975,16 @@ URIs often come in the form of **URLs** (Uniform Resource Locators), which speci
 ### 5. Session Layer
 
 - Manages and controls the dialog between two devices.
+
 - Ensures that sessions remain open and data is synchronized.
 
-Key Concepts:
-
-- Session establishment, maintenance, and termination.
-- Synchronization: Reestablishing sessions after interruptions.
-
-Examples: APIs for maintaining sessions (e.g., sockets).
+Examples: APIs for maintaining sessions (e.g., **sockets**).
 
 ---
 
 ### 6. Presentation Layer
 
 - Translates data between the application and network formats.
-- Ensures data is in a readable format for the receiving application.
 
 Key Concepts:
 
@@ -1854,14 +1998,6 @@ Examples: SSL/TLS for secure data presentation, data compression.
 ### 7. Application Layer
 
 - Closest to the end-user and directly interacts with software applications.
-- Provides services such as file transfers, email, and remote login.
-
-Key Concepts:
-
-- Protocols for specific services: HTTP for web, FTP for file transfers, SMTP for email.
-- User Interfaces: Applications that rely on network communication.
-
-Examples: Web browsers (HTTP/HTTPS), email clients (SMTP, IMAP, POP3).
 
 ---
 
@@ -1875,53 +2011,24 @@ Examples: Web browsers (HTTP/HTTPS), email clients (SMTP, IMAP, POP3).
 6. Data Link: Ensures error-free transmission over local network.
 7. Physical Layer: Converts data to electrical signals for transmission.
 
-## IP address:port
+## API
 
-**IP address** (Internet Protocol address) is a numerical label assigned to each device connected to a network that uses the Internet Protocol for communication.
+**Application Programming Interface (API)** - set of rules and protocols that allow for contract between a client (like an application or a service) and a server (another application or service).
 
-It serves two primary purposes:
+Types of APIs:
 
-1. **Identification**: Identifies a unique device on a network.
-2. **Location**: Provides the device's location within the network.
+- Web APIs
+- Library APIs (in a programming language)
+- Operating System APIs (e.g., Windows API, POSIX API)
 
-Versions of IP addresses:
+**Endpoint** - Specific URL where the API can be accessed.
 
-1. **IPv4**: Uses a 32-bit address space, providing approximately \(2^{32}\) (around 4.3 billion) unique addresses, formatted as `xxx.xxx.xxx.xxx` (e.g., `192.168.1.1`).
-2. **IPv6**: Uses a 128-bit address space, providing \(2^{128}\) addresses, which is an astronomically large number, formatted as eight groups of four hexadecimal digits (e.g., `2001:0db8:85a3:0000:0000:8a2e:0370:7334`).
+Common HTTP methods:
 
----
-
-**Port** - to differentiate services running on a single device.
-
-A device can have a single IP address but run multiple services (e.g., web server, email server, etc.), and ports allow communication to be directed to the right service.
-
-- Ports range from **0 to 65535**.
-- Some well-known ports:
-  - **80**: HTTP (web traffic)
-  - **443**: HTTPS (secure web traffic)
-  - **22**: SSH (secure shell)
-
-### **How Do We Avoid Running Out of IP Addresses?**
-
-#### For IPv4
-
-1. **Private IP Addresses and NAT (Network Address Translation)**:
-
-   - **Private IP ranges** (e.g., `192.168.x.x`, `10.x.x.x`) are not routable on the internet and are reused across private networks.
-   - A single public IP address can serve multiple devices in a private network by using NAT, which maps private IPs to a single public IP for external communication.
-
-2. **Dynamic IP Allocation**:
-
-   - Internet Service Providers (ISPs) often use **Dynamic Host Configuration Protocol (DHCP)** to assign IPs temporarily from a pool of addresses, optimizing usage.
-
-3. **IPv4 Exhaustion Workarounds**:
-   - Use of **Carrier-Grade NAT (CGNAT)** by ISPs.
-   - Encouraging the adoption of IPv6.
-
-#### For IPv6
-
-- The address space is so large (\(2^{128}\)) that running out is practically impossible.
-- It eliminates the need for NAT, simplifying address allocation.
+- GET: Retrieve data.
+- POST: Submit data.
+- PUT: Update data.
+- DELETE: Remove data.
 
 ## `nc` NetCat (for TCP & UDP)
 
@@ -1937,7 +2044,7 @@ nc [options] [hostname] [port]
     nc example.com 80
     ```
 
-    "Establishing a UDP connection" is a linguistic simplification or abstraction, because UDP is connectionless.
+    \*"Establishing a UDP connection" is a linguistic simplification or abstraction, because UDP is _connectionless_.
 
 2. Simple web request (Send a raw HTTP request)
 
@@ -1976,27 +2083,8 @@ nc [options] [hostname] [port]
     nc -l -u -p 1234                # UDP
 
     # from another terminal to send http request
-    curl -i "http://localhost:12345/p/a/t/h?text=cats&query=dogs"
+    curl -i "http://localhost:1234/p/a/t/h?text=cats&query=dogs"
     ```
-
-## API
-
-**Application Programming Interface (API)** - set of rules and protocols that allow for contract between a client (like an application or a service) and a server (another application or service).
-
-Types of APIs:
-
-- Web APIs
-- Library APIs (in a programming language)
-- Operating System APIs (e.g., Windows API, POSIX API)
-
-**Endpoint** - Specific URL where the API can be accessed.
-
-Common HTTP methods:
-
-- GET: Retrieve data.
-- POST: Submit data.
-- PUT: Update data.
-- DELETE: Remove data.
 
 ### POCO C++ library
 
@@ -2046,9 +2134,9 @@ UB means the C++ standard imposes no requirements on what happens when UB is enc
 
 Sometimes a compiler can throw UB, but sometimes it doesn't and code somehow runs even though it has UB.
 
-### Example
+> Compiler always optimize based on the assumption that **UB does not exist** in the code.
 
-A compiler may optimize based on the assumption that UB does not exist in the code.
+### Example
 
 ```cpp
 int square(int n) {
@@ -2082,8 +2170,8 @@ But it's still UB, that's why in case of UB behavior is unpredictable.
 
 ## Passing by value
 
-This code in asm does the loop fully with accessing vec.size each time.  
-This happens, because compiler gives possibility to vec.size be changed while looping.
+This code in asm does the loop fully with accessing `vec.size` each time.  
+This happens, because compiler gives possibility to `vec.size` be changed while looping.
 
 ```cpp
 struct Vector {

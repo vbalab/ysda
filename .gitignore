@@ -1,0 +1,4 @@
+*.out
+*.gdb_history
+*videos/
+*.vscode/

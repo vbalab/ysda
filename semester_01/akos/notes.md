@@ -1,4 +1,4 @@
-<!-- markdownlint-disable MD001, MD029 -->
+<!-- markdownlint-disable MD001 MD029 MD033 MD045 -->
 # Tasks
 
 ## pull
@@ -336,8 +336,10 @@ Realisation of interfaces - drivers
 
 Timesharing: every moment on each processor core _or_ process is executed
 
-**File descript** - is a low-level integer handle used to access a file or other input/output resources like pipes, sockets, or devices.  
-Standard FD: 0, 1, 2 are reserved for stdin, stdout, stderr.
+> All **I/O** in Unix/Linux is modeled as **file descriptors** — "everything is a file" philosophy
+
+**File descriptor** - is a low-level integer handle used to access a file or other input/output resources like pipes, sockets, or devices.  
+Standard FD: 0, 1, 2 are reserved for `stdin`, `stdout`, `stderr`.
 
 syscall: ... fd, const ... _buf, size_t count _-[how many bites]-\*
 
@@ -370,7 +372,7 @@ waits for state changes in a child process, such as its termination.
 
 creates a unidirectional data channel that can be used for **inter-process communication** (IPC): one for reading and one for writing.
 
-Data written to the write end of the pipe (fd[1]) is temporarily stored in a buffer (typically 64 KB) by the kernel, that's why _they don't share memory directly_. The buffer is an in-memory circular queue. When the read end (fd[0]) reads the data, it is removed from the buffer.
+Data written to the write end of the pipe (fd[1]) is temporarily stored in a buffer (typically 64 KB) by the kernel, that's why _they don't share memory directly_. The buffer is an in-memory circular queue. When the read end (`fd[0]`) reads the data, it is removed from the buffer.
 
 - if the buffer is full, then the writer is blocked, until reader reads
 - if the buffer is empty, a read operation will block until data is available
@@ -634,7 +636,7 @@ Each memory segment is defined by:
 
 ---
 
-### How it was
+## How it was
 
 - **GDT** (Global Descriptor Table): A global structure that defines the base, limit, and flags for different memory segments (e.g., kernel code, data).
 - **LDT** (Local Descriptor Table): Optional, and used when processes need their own segment layout.
@@ -849,7 +851,7 @@ It contrasts with pipes, which are suitable for sequential, stream-based communi
 
 # Lecture 6 - Cache Layers
 
-![alt text](images_for_notes/caching.png)
+![alt text](notes_images/caching.png)
 CPU operates with virtual addresses.
 
 The **memory controller** on a CPU is responsible for managing the flow of data between the CPU and the main memory (RAM).
@@ -879,9 +881,9 @@ Location:
 
 ## Cache levels
 
-<img src="images_for_notes/cache_layers.png" width="400"/>
+<img src="notes_images/cache_layers.png" width="400"/>
 
-![alt text](images_for_notes/cache_layers2.png)
+![alt text](notes_images/cache_layers2.png)
 
 ### L1 (16-64 KB)
 
@@ -968,46 +970,6 @@ Cons: Some cache lines may go unused.
     - Update: You must send the entire data value to every cache holding the line.
 
 2. Writes are often followed by more writes and with Invalidate we broadcast only once first time.
-
-## False sharing
-
-<img src="images_for_notes/false_sharing.png" width="400"/>
-
-**False sharing** - when multiple threads on different CPU cores access different variables that happen to be stored in the same cache line: any update by one thread marks the entire cache line as "modified" or invalidates it in other cores.
-
-### Solution
-
-```cpp
-constexpr size_t kCacheLineSize = std::hardware_destructive_interference_size;
-```
-
-1. **Padding**
-
-    ```cpp
-    struct KeepOnSeparateCacheLines {
-        std::atomic<int32_t> counter;
-        char padding[kCacheLineSize - sizeof(std::atomic<int32_t>)];
-    };
-    ```
-
-2. `alignas` - better!
-
-    ```cpp
-    struct alignas(kCacheLineSize) KeepOnSeparateCacheLines {
-        std::atomic<int32_t> counter;
-    };
-    ```
-
-    OR
-
-    ```cpp
-    struct KeepOnSeparateCacheLines {
-        alignas(kCacheLineSize) std::atomic<int32_t> counter1;
-        alignas(kCacheLineSize) std::atomic<int32_t> counter2;
-    };
-    ```
-
----
 
 ### Read-Modify-Write (RMW)
 
@@ -1321,7 +1283,7 @@ These are schedulers of general purpose.
 It allocates a **quantum** (fixed time slice ) to each process in the ready queue, in a cyclic order.  
 Once a process's time slice is up, it moves to the back of the queue, allowing the next process to run.
 
-#### How it was hacked in Linux
+### How it was hacked in Linux
 
 A process could voluntarily yield the CPU just before its time slice expires, effectively resetting its position in the queue without losing much time
 

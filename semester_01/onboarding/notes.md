@@ -119,7 +119,7 @@ do
 To keep working process if you want to switch to another branch without commiting:  
 
 ```sh
-git stash  
+git stash
 git stash apply            // reapply stashed changes, but keeps it in the stash list  
 git stash pop              // with removing stash  
 git stash clear  

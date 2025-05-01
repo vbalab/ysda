@@ -127,7 +127,7 @@ std::vector<size_t> ArrayZFunction(const std::string& str) {
 
 # Lecture 2 - Multiple Pattern Search (Aho-Corasick)
 
-![alt text](images_for_notes/aho_corasick.png)
+![alt text](notes_images/aho_corasick.png)
 
 1. Construct **Prefix Tree (Trie)**
 2. Build Failures for each node & Group words
@@ -266,8 +266,8 @@ But to bild Trie of all suffixes it takes $O(T^2)$ $\to$ to do it in $O(T)$ use 
 
 ## Ukkonen's Suffix Tree
 
-![alt text](images_for_notes/suffix_tree_01.png)
-![alt text](images_for_notes/suffix_tree_02.png)
+![alt text](notes_images/suffix_tree_01.png)
+![alt text](notes_images/suffix_tree_02.png)
 
 - A - continuation of list (implicit location)
 
@@ -311,7 +311,7 @@ Sort [170, 45, 75, 90, 802, 24, 2, 66]
 
 **Suffix array** - sorted array of all suffixes of a string.
 
-![alt text](images_for_notes/suffix_array_idea.png)
+![alt text](notes_images/suffix_array_idea.png)
 
 So we have suffix array that represents (if turned into suffixes):
 
@@ -333,15 +333,15 @@ And we can literally do **binary search** within this suffix array.
 
 $O(T \log T)$ time because $1 \to 2 \to 4 \to \dots \to T$ and at each step calculation of $A^k$ by $O(T)$.
 
-![alt text](images_for_notes/kmr.png)
+![alt text](notes_images/kmr.png)
 
 $A^1$ is calculated using **Counting Sort**:
 
-![alt text](images_for_notes/a_1.png)
+![alt text](notes_images/a_1.png)
 
 All other $A^k$ calculated using concatination with $A^\frac{k}{2}$ results using Radix Sort
 
-![alt text](images_for_notes/a_k.png)
+![alt text](notes_images/a_k.png)
 
 ## Karkkainen-Sanders
 
@@ -357,8 +357,42 @@ $O(n)$ time using a divide and conquer by:
 
 > Reduced problem size is ~2n/3, which allows for linear recursion.
 
-![alt text](images_for_notes/karkkainen_sanders.png)
+![alt text](notes_images/karkkainen_sanders.png)
 
 # Lecture 5 - LCP Array
 
- 
+![alt text](notes_images/lcp01.png)
+
+![alt text](notes_images/lcp02.png)
+
+# Lecture 6 - Burrows-Wheeler Transform
+
+- didn't watch
+
+# Lecture 7 - Fast Fourier Transform (Substring Search)
+
+## Counting Bits
+
+![alt text](<notes_images/counting_bits.png>)
+
+## FFT
+
+![alt text](<notes_images/fft.png>)
+
+**Binarization** of alphabet $\Sigma$ into sequances of bits ($\{0, 1\}$) of length $\log(\Sigma)$: 
+
+![alt text](notes_images/binarization.png)
+
+Basically, ASCII (with length of 8 bits = 1 byte) and UTF-8 are alphabets.
+
+![alt text](notes_images/fft_to_patter_matching_of_bits.png)
+
+![alt text](notes_images/fft_final.png)
+
+1 & 2 circles calculated by FFT, 3rd circle calculated as is.
+
+# Lecture 8
+
+# Lecture 9
+
+# Lecture 10 - Finite Automata & Regular Expressions

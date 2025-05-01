@@ -16,7 +16,7 @@ clang-tidy TASK_NAME.cpp -- -std=c++20
 ## Compiling
 
 ```bash
-clang++ -Wall -Wextra -pedantic -std=c++20 TASK_NAME.cpp
+clang++ -Wall -Wextra -Wpedantic -Werror -std=c++20 TASK_NAME.cpp
 ```
 
 To check execution time:
@@ -101,16 +101,69 @@ for (auto event : events) {                         // events are sorted by time
 }
 ```
 
+## Lazy delete
+
+Hold a binary mask (0, 1, 1, 0, 0) of where index suggests that this object should be deleted when observed.  
+Should be used when there is no value of deleting an element before observing it.
+
 # Seminar 4 - DIDN'T WATCHED
 
 # Seminar 5 - Squares
 
 Write **bruteforce** solution fastly to test small testcases.
 
-## Lazy delete
+![alt text](notes_images/squares.png)
 
-Hold a binary mask (0, 1, 1, 0, 0) of where index suggests that this object should be deleted when observed.  
-Should be used when there is no value of deleting an element before observing it.
+When found 2 rectangles with the same hash $\to$ check them manually to check for collision.
+
+## Polynomial Hash
+
+The idea - hash continuous part, then, when shifting 1 element ahead, no need to completely recalculate hash, you can recalculate hash using previous hash and current value.
+
+![alt text](notes_images/polynomial_hash.png)
+
+2nd approach is clearly easier.
+
+As _value_ store only indicies of square, no need for storing full `std::vector<std::vector>`.
+
+# Seminar 6 - Cubes
+
+## Fenwick Tree (Binary Indexed Tree (BIT))
+
+Fenwick Tree has no Tree...
+
+🌲 A Fenwick Tree is used to:
+
+- **Query prefix sums** efficiently: `sum[1..i]` in `O(log n)` time  
+- **Update** a value at position `i` (like `a[i] += delta`) in `O(log n)` time  
+
+### Why not just use a normal array?
+
+1. regular array:
+
+    - Getting a prefix sum `a[1] + ... + a[i]` takes `O(n)`
+    - Updating an element can be `O(1)`
+
+2. prefix sum array:
+
+    - Prefix queries are `O(1)`
+    - But updating a value requires updating all future prefix sums → `O(n)`
+
+> 🧠 Fenwick Tree gives a _balance_: both updates and queries in `O(log n)`.
+
+---
+
+$
+\text{tree}[ \text{idx} ] = \sum_{j = \text{idx} - 2^{r} + 1}^{\text{idx}} \text{nums}[j]
+$
+
+Which sums $\text{tree}[ \text{idx} ]$ stores:
+
+![alt text](notes_images/fw_segments.png)
+
+To update at $\text{idx}$ $\to$ just update all segments that include $nums[$\text{idx}$]$
+
+![alt text](notes_images/fw_segments_update.png)
 
 # Lecture 1 - RAM Machine
 

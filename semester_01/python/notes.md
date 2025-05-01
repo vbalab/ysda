@@ -1638,7 +1638,7 @@ df.filter(df.age > 30).show()
 
 # Lecture 13.1 - Tests
 
-The Three Laws of TDD (by Robert C. Martin, aka Uncle Bob):
+The Three Laws of TDD (Test Driven Development) (by Robert C. Martin, aka Uncle Bob):
 
 1. Write a **failing** test first
 2. Write only enough test code to fail
@@ -1683,11 +1683,11 @@ This also makes it easy to configure logging in the `__init__.py` file.
 
 ## Logging flow
 
-![alt text](images_for_notes/logging.png)
+![alt text](notes_images/logging.png)
 
 # Lecture 14 - Protobuf & Flatbuf
 
-Protocol Buffers (Protobuf) & FlatBuffers (Flatbuf) - language-neutral, platform-neutral serialization libraries developed by Google.
+Protocol Buffers (Protobuf) & Flat Buffers (Flatbuf) - language-neutral, platform-neutral serialization libraries developed by Google.
 
 Key Features of both:
 
@@ -1701,6 +1701,9 @@ Key Features of both:
 
 **Protobuf** - general-purpose binary serialization format designed for efficient data transmission and storage.
 
+Protocol buffers provide a serialization format for packets of typed, structured data that are up to a _few megabytes_ in size.  
+The format is suitable for both ephemeral network traffic and long-term data storage.
+
 ✅ Much smaller than JSON and faster, but requires parsing.
 
 ✅ Can be streamed efficiently over networks.
@@ -1708,6 +1711,40 @@ Key Features of both:
 ❌ No direct random access to serialized data (all fields must be parsed).
 
 > Used for: gRPC, microservices, or APIs.
+
+Example of `.proto` file:
+
+```proto
+edition = "2023";
+
+package tutorial;
+
+option features.field_presence = EXPLICIT;
+
+message Person {
+  string name = 1;
+  int32 id = 2;
+  string email = 3;
+
+  enum PhoneType {
+    PHONE_TYPE_UNSPECIFIED = 0;
+    PHONE_TYPE_MOBILE = 1;
+    PHONE_TYPE_HOME = 2;
+    PHONE_TYPE_WORK = 3;
+  }
+
+  message PhoneNumber {
+    string number = 1;
+    PhoneType type = 2 [default = PHONE_TYPE_HOME];
+  }
+
+  repeated PhoneNumber phones = 4;
+}
+
+message AddressBook {
+  repeated Person people = 1;
+}
+```
 
 ## Flatbuf
 
@@ -1733,7 +1770,46 @@ NEED TO WATCH
 
 # Lecture 16 - API
 
-NEED TO WATCH
+## HTTP Methods
+
+> Use POST instead of GET, because POST guarantees that HTTP's body won't be lost, while GET does not.
+
+- GET = Read  
+- POST = Create  
+- PUT = Save  
+- PATCH = Update  
+- DELETE = Delete  
+
+- GET — safe, you can retry it without worries  
+- GET, PUT, DELETE — _idempotent_. If something breaks, you can safely retry  
+- POST, PATCH — unsafe, they might change something. Think before retrying  
+
+## REST API
+
+**REST API** - web service interface that conforms to the architectural constraints of REST:
+
+1. Client–Server:
+    - Separation of concerns between the client (user interface) and the server (data storage and logic).
+
+2. Stateless:
+
+3. Cacheable:
+    - Responses must explicitly indicate whether they are cacheable or not to improve performance and scalability.
+
+4. Uniform Interface (core principle of REST):
+    - Resource identification in requests (e.g., /users/1)
+    - Resource manipulation via representations (typically JSON or XML)
+    - Self-descriptive messages (the request includes all necessary info)
+    - Hypermedia as the engine of application state (HATEOAS)
+
+There are many different libraries and frameworks for building **REST APIs**:
+
+1. AIOHTTP
+2. Django, Django Rest
+3. Flask, Flask RESTX (formerly Flask-RESTplus), etc.
+4. Falcon
+5. Pyramid
+6. FastAPI $\leftarrow$ _use it_
 
 # Lecture 17 - Optimization
 

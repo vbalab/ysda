@@ -118,7 +118,7 @@ $$
 
 4. For unrelevant $x^d$: $\hat{\theta}_{Ridge}^d \in (0, 1)$ (кружок)
 
-![Ridge](images/ridge.png)
+![Ridge](notes_images/ridge.png)
 
 ### Lasso
 
@@ -129,7 +129,7 @@ $$\lambda ||\theta||^1$$
 4. For unrelevant $x^d$: $\hat{\theta}_{Lasso}^d = 0$ (ромбик):  
     Линии уровная $L(\theta)$ будут касаться ромбика более вероятно в уголках ромбика, там, где $\theta_{Lasso}^d=0$ для каких-то $d$.
 
-![Lasso](images/lasso.png)
+![Lasso](notes_images/lasso.png)
 
 ### Elastic
 
@@ -137,7 +137,7 @@ $$\lambda_1 ||\theta||^1 + \lambda_2 ||\theta||^2$$
 
 Very much as Ridge, but seems to be better.
 
-![Elastic](images/elastic.png)
+![Elastic](notes_images/elastic.png)
 
 # Lecture 3 - Maximum Likelihood, Logit
 
