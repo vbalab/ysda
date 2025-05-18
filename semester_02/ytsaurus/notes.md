@@ -1,8 +1,24 @@
 <!-- markdownlint-disable MD001 MD010 MD024 MD025 MD049 -->
 
+# Notes
+
+```bash
+ls ~/.yt/token
+```
+
 # Lecture 1
 
+[YTsaurus](https://ytsaurus.tech/docs/en/overview/about)
+
 ## Architecture
+
+![alt text](notes_images/arch.png)
+
+The YTsaurus architecture contains three layers:
+
+- Distributed file system and metadata storage: Cypress.
+- Scheduler for distributed computing with MapReduce model support.
+- High-level computing engines: YQL, CHYT, and SPYT.
 
 1. Storage:
 
@@ -39,3 +55,4 @@ File - **блобик** with a byte sequence $\to$ why to use files directly? $\
 # Lecture 2
 
 ![alt text](notes_images/choice_logic.png)
+

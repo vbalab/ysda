@@ -1,0 +1,46 @@
+\newcommand{\groupnumber}{1}
+
+\documentclass[11pt]{article}
+
+\usepackage{hometask}
+\usepackage{amsfonts}
+\usepackage{expdlist}
+\usepackage{cmap}  % should be before fontenc
+\usepackage[T2A]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[russian]{babel}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+
+\newcommand{\E}{\ensuremath{\mathsf{E}}}  % матожидание
+\newcommand{\D}{\ensuremath{\mathsf{D}}}  % дисперсия
+\newcommand{\Prb}{\ensuremath{\mathsf{P}}}  % вероятностная мера
+
+\newcommand{\eps}{\varepsilon}  % эпсилон
+\renewcommand{\phi}{\varphi}    % фи
+
+\renewcommand{\le}{\leqslant}   % <=
+\renewcommand{\leq}{\leqslant}  % <=
+\renewcommand{\ge}{\geqslant}   % >=
+\renewcommand{\geq}{\geqslant}  % >=
+
+\begin{document}
+
+\begin{problem}{5}
+Пусть $t_r(I)$ обозначает время рандомизированного алгоритма на входе $I$ при значениях случайных бит $r$. Для заданного множества входов $\mathcal{I}$
+рассмотрим две ``меры сложности``:
+$$
+	A = \mathop{\rm max}_{I \in \mathcal{I}} E_r \left[ t_r(I) \right], \qquad
+	B = E_r \left[ \mathop{\rm max}_{I \in \mathcal{I}} t_r(I) \right].
+$$
+Можно ли утверждать, что одно из чисел $A$ и $B$ всегда не меньше другого?
+\end{problem}
+
+\begin{solution}
+	Используя неравенство Йенсена, можно показать, что $B \ge A$, что следует из вогнутости функции $\max_{I \in \mathcal{I}} t_r(I)$ по случайным битам $r$. Вогнутость функции $\max$ в данном контексте следует из свойств функций максимума в пространстве случайных величин.
+
+	Поэтому ожидание максимума всегда не меньше максимума ожиданий.
+\end{solution}
+
+\end{document}

@@ -1811,6 +1811,51 @@ There are many different libraries and frameworks for building **REST APIs**:
 5. Pyramid
 6. FastAPI $\leftarrow$ _use it_
 
+## FastAPI
+
+[FastAPI is all based on Pydantic.](https://fastapi.tiangolo.com/python-types/#pydantic-models:~:text=FastAPI%20is%20all%20based%20on%20Pydantic.)
+
+```py
+from fastapi import FastAPI
+
+app = FastAPI()
+
+@app.get("/")
+async def root():
+    return {"message": "Hello World"}
+```
+
+```bash
+fastapi dev main.py
+fastapi run main.py     # for production code
+```
+
+Go to:
+
+- [returns](http://127.0.0.1:8000/)
+- [docs](http://127.0.0.1:8000/docs#)
+- [openapi.json](http://127.0.0.1:8000/openapi.json)
+
+```py
+from fastapi import Body, Path, Query
+```
+
+### Return Type Trick
+
+```py
+class BaseUser(BaseModel):
+    username: str
+    email: EmailStr
+    full_name: str | None = None
+
+class UserIn(BaseUser):
+    password: str
+
+@app.post("/user/")
+async def create_user(user: UserIn) -> BaseUser:
+    return user
+```
+
 # Lecture 17 - Optimization
 
 ## GIL

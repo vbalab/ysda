@@ -11,6 +11,71 @@
 - [Setup](https://gitlab.manytask.org/cpp/public-2025-spring/-/blob/main/docs/SETUP.md)
 <https://gitlab.manytask.org/cpp/public-2025-spring/-/tree/main/range-sum>
 
+## Docker
+
+```Dockerfile
+FROM ubuntu:24.04
+
+ENV TZ=Europe/Moscow
+RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+
+RUN apt update
+RUN apt install -y gnupg
+RUN apt update && apt -y upgrade
+
+RUN apt install -y \
+    build-essential \
+    cmake \
+    ccache \
+    ninja-build \
+    g++ \
+    clang-19 \
+    clang-format-19 \
+    clang-tidy-19 \
+    libclang-19-dev
+
+RUN apt install -y \
+    python3 \
+    python3-pip \
+    python3-venv \
+    git
+
+RUN DEBIAN_FRONTEND=noninteractive apt install -y \
+    libpoco-dev \
+    libjsoncpp-dev \
+    libboost-dev \
+    libre2-dev \
+    libpng-dev \
+    libjpeg-dev \
+    libfftw3-dev \
+    libedit-dev \
+    libtbb-dev \
+    protobuf-compiler \
+    libprotoc-dev \
+    libgflags-dev \
+    libgoogle-glog-dev \
+    m4 \
+    firejail
+
+RUN apt clean && rm -rf /var/lib/apt/lists/*
+```
+
+```bash
+docker build -t checker .
+
+docker run -it --rm   -v ~/all/study/shad/semester_02/cpp/vbalab:/vbalab   -w /vbalab   checker   bash
+```
+
+Inside the container:
+
+```bash
+rm -rf build
+mkdir build
+cmake ../
+make test_...
+./test_...
+```
+
 ## How to set up linter (on Fedora Linux)
 
 ```sh
@@ -304,7 +369,7 @@ struct MyStruct {
 };
 ```
 
-## initializer list
+## Memory Initializer List
 
 ```cpp
 struct MyStruct {
@@ -314,7 +379,8 @@ struct MyStruct {
     const int value4;
 
     MyStruct(int _value1, int _value2, int _value3,  int _value4)
-        : value1(_value1)       // initializer list
+        // Memory Initializer List:
+        : value1(_value1)
         , value3(_value3)
         , value4(_value4) {     // const can be initialized only here
         value2 = _value2;       // at this stage MyStruct is already initialized and only changes attributes
@@ -718,7 +784,7 @@ Thing t2 = std::move(t1); // invokes move constructor
 ## lvalue to rvalue conversion
 
 ```cpp
-x = y;
+T x = y;
 // x.operator=(static_cast<T>(y));  // what really happens
 ```
 
@@ -753,76 +819,79 @@ If a class defines one of the following, it should define all 3,5:
 **Rule of 0**: developers should avoid manually defining any of the special member functions whenever possible, leveraging automatic resource management techniques provided by C++ standard library utilities such as `std::unique_ptr`, `std::shared_ptr`, and other **RAII** (Resource Acquisition Is Initialization) patterns.
 
 ```cpp
-class MyString {
-    char* data;
-
+class String {
 public:
-    MyString(const char* str = "") {
-        data = new char[std::strlen(str) + 1];
-        std::strcpy(data, str);
+    String(const char* str = "") : data_(new char[std::strlen(str) + 1]) {
+        std::strcpy(data_, str);
     }
 
     // Destructor
-    ~MyString() {
-        delete[] data;
+    ~String() {
+        delete[] data_;
     }
 
     // Copy Constructor
-    MyString(const MyString& other) {
-        data = new char[std::strlen(other.data) + 1];
-        std::strcpy(data, other.data);  // or std::memcpy()
+    String(const String& other) : data_(new char[std::strlen(other.data_) + 1]) {
+        std::strcpy(data_, other.data_);  // or std::memcpy()
     }
 
     // Copy Assignment Operator
     // since it results in `Class&` as return type -> `(x = y) = z` is the same as `(x = z)`
-    MyString& operator=(const MyString& other) {
-        if (this != &other) {
-            delete[] data;  // Clean up existing data
-
-            data = new char[std::strlen(other.data) + 1];
-            std::strcpy(data, other.data);
-
-            // OR:
-            // MyString temp(other);
-            // std::swap(data, temp.data);    // OR EVEN: std::swap(*this, temp);
+    String& operator=(const String& other) {
+        if (this == &other) {
+            return *this;
         }
+
+        delete[] data_;  // Clean up existing data
+
+        data_ = new char[std::strlen(other.data_) + 1];
+        std::strcpy(data_, other.data_);
+
+        // OR:
+        // String temp(other);
+        // std::swap(data_, temp.data_);    // OR EVEN: std::swap(*this, temp);
         return *this;
     }
 
     // Move Constructor
-    MyString(MyString&& other) noexcept : size(other.size), data(other.data) {  // no const, since it's already rvalue
+    String(String&& other) noexcept : size(other.size), data_(other.data_) {  // no const, since it's already rvalue
         // so when other is deleted attribes of 'this' (which now share memory) won't get affected
-        other.data = nullptr;
-        // done to Prevent Double Deletion: After moving data from other to this, both this and other would point to the same memory. When other is destroyed, its destructor would attempt to delete[] data
+        other.data_ = nullptr;
+        // done to Prevent Double Deletion: After moving data_ from other to this, both this and other would point to the same memory. When other is destroyed, its destructor would attempt to delete[] data_
     }
 
     // Move Assignment Operator
-    MyString& operator=(MyString&& other) noexcept {
-        if (this != &other) {
-            delete[] data;
-
-            size = other.size;
-            data = other.data;
-
-            other.data = nullptr;
-
-            // OR:
-            // std::swap(size, other.size);
-            // std::swap(data, other.data);
+    String& operator=(String&& other) noexcept {
+        if (this == &other) {
+            return *this;
         }
+
+        delete[] data_;
+
+        size = other.size;
+        data_ = other.data_;
+
+        other.data_ = nullptr;
+
+        // OR:
+        // std::swap(size, other.size);
+        // std::swap(data_, other.data_);
 
         return *this;
     }
+
+private:
+    char* data_;
 };
 
 
 int main() {
-    MyString s1("Hello");
+    String s1("Hello");
 
-    MyString s2 = s1;  // copy constructor
-    MyString s3(std::move(s1));  // move constructor
+    String s2 = s1;  // copy constructor
+    String s3(std::move(s1));  // move constructor
 
-    MyString s4;
+    String s4;
     s4 = s2;  // copy assignment
     s4 = std::move(s3);  // move assignment
 
@@ -1362,78 +1431,6 @@ public:
 };
 ```
 
-## Casting
-
-### 1. `static_cast<T>(expr)`
-
-- Compile-time type conversion
-- safe-ish
-- _checks types_
-
-- UB if used incorrectly
-
-```cpp
-int i = 42;
-float f = static_cast<float>(i);      // OK
-
-Base* b = new Derived();
-Derived* d = static_cast<Derived*>(b); // OK if you're sure
-```
-
-### 2. `reinterpret_cast<T>(expr)`
-
-- Bit-level reinterpretation of memory.
-- Ignores types completely
-
-- May violate strict aliasing ($\to$ UB)
-
-```cpp
-int* ip = new int(42);
-char* cp = reinterpret_cast<char*>(ip); // View int memory as bytes
-```
-
-### 3. `dynamic_cast<T>(expr)`
-
-- Safe RTTI-based cast for polymorphic types.
-
-- Returns `nullptr` on failure (for pointers)
-- Throws `std::bad_cast` (for references)
-- Only works if the base class has at least one `virtual` function
-
-Use it for:
-
-- Downcasting polymorphic pointers
-- Checking cast validity at runtime
-
-```cpp
-Base* b = new Derived();
-Derived* d = dynamic_cast<Derived*>(b); // ✅ Works if actually Derived*
-```
-
-Counter-example:
-
-```cpp
-struct A {};                // ❌ No virtual functions
-struct B : A {};
-A* a = new B;
-B* b = dynamic_cast<B*>(a); // Compile error!
-```
-
-### 4. `const_cast<T>(expr)`
-
-- Adds or removes `const` / `volatile` qualifiers.
-
-- Modifying a `const` object $\to$ UB
-
-```cpp
-const int x = 10;
-int* px = const_cast<int*>(&x); // ⚠️ Legal, but modifying is UB
-
-void func(char* p);
-const char* s = "hello";
-func(const_cast<char*>(s)); // OK if func doesn’t write to s
-```
-
 ## Polymorphism
 
 ### Static Polymorphism
@@ -1668,13 +1665,49 @@ Modern use of `inline` is to allow function definitions in header files without 
 #endif // MY_HEADER_H
 ```
 
-## Different stages of compilation
+## 4 stages of compilation
 
-```bash
-clang -E my_program.c                   # preprocessed code
-clang -P -E my_program.c                # -P to suppress the generation of line markers, (e.g., # 1 "file.c" lines) in the output
-clang -emit-llvm -S my_program.c        # LLVM Intermediate Representation, which is an intermediate step between source code and machine code
-clang -S my_program.c                   # assembly code
+```txt
+         source.cpp
+             │
+   ┌─────────┴───────────┐
+   │ Preprocessing       │
+   │ (clang -E)          │
+   │ - Expand macros     │
+   │ - Include headers   │
+   │ - Remove comments   │
+   └─────────┬───────────┘
+             │
+         source.i
+             │
+   ┌─────────┴───────────┐
+   │ Compilation         │
+   │ (clang -S)          │ <- `clang -emit-llvm -S` - LLVM Intermediate Representation - step between source code and machine code
+   │ - Syntax analysis   │
+   │ - Optimization      │
+   │ - Convert to ASM    │
+   └─────────┬───────────┘
+             │
+         source.s
+             │
+   ┌─────────┴───────────┐
+   │ Assembly            │
+   │ (clang -c)          │
+   │ - Convert ASM to    │
+   │   machine code      │
+   └─────────┬───────────┘
+             │
+         source.o
+             │
+   ┌─────────┴───────────┐
+   │ Linking             │
+   │ (clang)             │
+   │ - Resolve symbols   │
+   │ - Link libraries    │
+   │ - Produce binary    │
+   └─────────┬───────────┘
+             │
+         executable
 ```
 
 ### Object files
@@ -1684,7 +1717,7 @@ These object files contain machine code (binary instructions) generated from you
 Object files are intermediate files that are later linked together to create an executable or library.
 
 ```bash
-clang -c my_program.c -o my_program.o
+clang -c my_program.cpp -o my_program.o
 
 objdump -d my_program.o
 ```

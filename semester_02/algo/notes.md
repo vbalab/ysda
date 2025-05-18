@@ -1,4 +1,4 @@
-<!-- markdownlint-disable MD025, MD001, MD024 -->
+<!-- markdownlint-disable MD001, MD024, MD025, MD033 -->
 
 # Lecture 1 - String Pattern Matching (KMP, Z-fun)
 
@@ -127,7 +127,9 @@ std::vector<size_t> ArrayZFunction(const std::string& str) {
 
 # Lecture 2 - Multiple Pattern Search (Aho-Corasick)
 
-![alt text](notes_images/aho_corasick.png)
+<div align="center">
+    <img src="notes_images/aho_corasick.png" alt="Network Flow" width="600" height="300">
+</div>
 
 1. Construct **Prefix Tree (Trie)**
 2. Build Failures for each node & Group words
@@ -396,3 +398,98 @@ Basically, ASCII (with length of 8 bits = 1 byte) and UTF-8 are alphabets.
 # Lecture 9
 
 # Lecture 10 - Finite Automata & Regular Expressions
+
+# Lecture ... - Network Flows, Ford-Fulkerson Algorithm
+
+## Network Flow
+
+Definitions:
+
+Given a **flow network** represented as a directed graph $ G = (V, E) $ where:
+
+- $ s $ - **source** vertex
+- $ t $ - **sink** vertex
+- Each edge $ e $ has a **capacity** $ c(e) \geq 0 $.
+
+<div align="center">
+    <img src="notes_images/network_flow.png" alt="Network Flow" width="600" height="400">
+</div>
+
+With optimization **task** - find maximum flow path: $|f| \to \max$
+
+## Matching Task
+
+<div align="center">
+    <img src="notes_images/matching_task.png" alt="Network Flow" width="400" height="600">
+</div>
+
+Matching task from:
+
+<div align="center">
+    <img src="notes_images/matching_task_from.png" alt="Network Flow" width="200" height="100">
+</div>
+
+Turns into Network Flow optimization problem:
+
+<div align="center">
+    <img src="notes_images/matching_task_into.png" alt="Network Flow" width="200" height="100">
+</div>
+
+## New Network Flow
+
+New definitions:
+
+<div align="center">
+    <img src="notes_images/network_flow_2.png" alt="Network Flow" width="600" height="400">
+</div>
+
+<!-- ![alt text](notes_images/network_flow_2.png) -->
+
+## Ford-Fulkerson Algorithm
+
+<div align="center">
+    <img src="notes_images/ford-fulkerson.png" alt="Network Flow" width="600" height="400">
+</div>
+
+<div align="center">
+    <img src="notes_images/ford-fulkerson_at_work.png" alt="Network Flow" width="200" height="300">
+</div>
+
+### 1. Initialize Flow
+
+Start with **zero flow**: $ f_0 = 0 $ for every edge.
+
+### 2. Residual Graph Construction
+
+Construct the **residual graph** $ G_f $ based on the current flow:
+
+- The **residual capacity** of an edge $ e $ is:
+    $$
+    c_f(e) = c(e) - f(e)
+    $$
+- If $ f(e) > 0 $, add a **reverse edge** with capacity $ f(e) $.
+
+### 3. Finding Augmenting Paths
+
+- Search for a path from $ s $ to $ t $ in the residual graph $ G_f $ using a **BFS** or **DFS**.
+- This path should have **positive residual capacity** along all edges.
+
+### 4. Augment Flow Along the Path
+
+1. Find the **bottleneck capacity**:
+    $$
+    \epsilon = \min \{ c_f(e) \mid e \text{ is on } P \}
+    $$
+2. Update the flow along the path:
+    - **Forward Edge Update:** $ f(e) = f(e) + \epsilon $
+    - **Backward Edge Update:** $ f(e') = f(e') - \epsilon $ (reverse edges)
+
+### 5. Repeat
+
+Repeat the process until **no more augmenting paths** can be found.
+
+# Lecture ... - Network Flows, Edmonds-Karp
+
+## Edmonds-Karp
+
+Ford-Fulkerson using BFS = **Edmonds-Karp**

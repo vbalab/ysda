@@ -182,6 +182,71 @@ struct __attribute__((packed)) PackedStruct {
 
 It's the same as telling `alignas(1)` to each field of struct.
 
+## Clang
+
+Core classes:
+
+- `Decl`
+- `Stmt`
+- `Type`
+
+Glue classes:
+
+- `DeclContext`
+- `TemplateArgument`
+- `NestedNameSpecifier`
+- `QualType`
+
+> `QualType` - qualifier to the type, e.g. `const`, `&&`
+
+All types of libclang are prefixed with `CX`.
+
+---
+
+`clang::ASTFrontendAction` - runs tools on AST - answers the question:
+
+“What should Clang do with this source file?”
+
+Examples:
+
+- Parse and build the AST? (ASTFrontendAction)
+- Generate LLVM IR? (EmitLLVMOnlyAction)
+- Print preprocessed source? (PreprocessOnlyAction)
+
+---
+
+`clang::ASTContext` - info about AST:
+
+- identifier table
+- source manager
+
+`clang::ASTContext.getTranslationUnitDecl()` - entry point in AST.
+
+---
+
+`clang::ASTConsumer` - receives and processes AST after it's been parsed.
+
+---
+
+`clang::RecursiveASTVisitor` walks AST recursively by overriding visit methods (like `VisitCXXRecordDecl`).
+
+`clang::RecursiveASTVisitor` is a **template-based CRTP** (Curiously Recurring Template Pattern) class. It uses **name-based lookup** to find which `Visit*` methods you've implemented.
+
+So internally, when you call:
+
+```cpp
+TraverseDecl(someDecl);
+```
+
+the visitor will look for and call:
+
+```cpp
+bool VisitCXXRecordDecl(CXXRecordDecl* decl);
+```
+
+if it encounters a `CXXRecordDecl` node.
+
+
 # Lecture 1 - Metaprogramming
 
 **Metaprogramming** - writing code that can generate/manipulate other code as data at _compile time_, rather than at runtime.
@@ -1347,7 +1412,7 @@ ifconfig -a       # legacy, still common
 
 ## Protocols
 
-**Protocol** - set of rules that determine how two or more entities in a communication system exchange data.
+**Protocol** - set of rules that determines how two or more entities in a communication system exchange data.
 
 Protocol specifies: Syntax & Semantics & Timing of messages
 
@@ -1362,21 +1427,21 @@ In `#include <bits/socket.h>` there are **protocol families**:
 
 ```cpp
 // PF = Protocol Family
-#define PF_UNSPEC	0	/* Unspecified.  */
-#define PF_LOCAL	1	/* Local to host (pipes and file-domain).  */
-#define PF_UNIX		PF_LOCAL /* POSIX name for PF_LOCAL.  */
-#define PF_FILE		PF_LOCAL /* Another non-standard name for PF_LOCAL.  */
-#define PF_INET		2	/* IP protocol family.  */
+#define PF_UNSPEC	0	        /* Unspecified.  */
+#define PF_LOCAL	1	        /* Local to host (pipes and file-domain).  */
+#define PF_UNIX		PF_LOCAL    /* POSIX name for PF_LOCAL.  */
+#define PF_FILE		PF_LOCAL    /* Another non-standard name for PF_LOCAL.  */
+#define PF_INET		2	        /* IP protocol family.  */
 ...
-#define PF_INET6	10	/* IP version 6.  */
+#define PF_INET6	10	        /* IP version 6.  */
 ...
-#define PF_ATMSVC	20	/* ATM SVCs.  */
+#define PF_ATMSVC	20	        /* ATM SVCs.  */
 ...
-#define PF_LLC		26	/* Linux LLC.  */
+#define PF_LLC		26	        /* Linux LLC.  */
 ...
-#define PF_BLUETOOTH	31	/* Bluetooth sockets.  */
+#define PF_BLUETOOTH	31	    /* Bluetooth sockets.  */
 ...
-#define PF_NFC		39	/* NFC sockets.  */
+#define PF_NFC		39	        /* NFC sockets.  */
 ```
 
 ### Protocols in OSI
@@ -1488,13 +1553,11 @@ You usually only specify protocol explicitly if:
 
 5. `epoll_wait()` $\to$ Wait for connections
 
-6. `accept()` $\to$ Accept incoming connection (_new fd!_)
+6. `accept()` $\to$ Accept incoming connection (_new fd!_ - gives you a new fd for each connection)
 
 7. `epoll_ctl(ADD)` $\to$ Register client socket fd
 
 8. `read()`/`write()` $\to$ Handle client data
-
-`accept()` gives you a new fd for each connection.
 
 Each connected client gets _its own fd_, which can be monitored via epoll.
 
@@ -1531,10 +1594,11 @@ read()/write()            TCP stack                                TCP stack    
 
 The OS splits payload into multiple **IP packets** based on Ethernet MTU, which are then each **encapsulated** into a separate **Ethernet frame** consisting of:
 
-- [UDP Header]
-- [IP Header]
-- [Ethernet Header]
-- IP packages
+- Ethernet Header
+- IP packet:
+  - IP Header
+  - UDP Header $\leftarrow$ only in the _first_ fragment
+  - Payload Fragment
 
 # Lecture 8.2 - Proxies
 
@@ -1607,11 +1671,11 @@ It uses **Protobuf** for interface definition and data serialization.
 
 Built on HTTP/2, gRPC enables bi-directional streaming, multiplexing, and efficient binary serialization.
 
-# Lecture 9 - LLVM
+# Lecture 9 - Clang, LLVM
 
 **LLVM** originally stood for Low Level Virtual Machine, _but today_ it’s just "LLVM" — a collection of modular and reusable compiler and toolchain technologies.
 
-It powers Clang (the C/C++/Objective-C compiler), Rust, parts of Swift, Julia, Zig, and more.
+It powers **Clang** (the C/C++/Objective-C compiler), Rust, parts of Swift, Julia, Zig, and more.
 
 ## Design
 
@@ -1628,7 +1692,8 @@ LLVM does it in 3 steps:
 **IR (Intermidiate Representation)** - an assembly-like, typed, SSA-based intermediate language.  
 IR designed to support dynamic optimizations at runtime.
 
-> Programming Language developer needs to only implement LLVM's Frontend
+> Programming Language developer only needs to only implement LLVM's Frontend  
+> Clang - frontend of LLVM
 
 ![alt text](notes_images/llvm.png)
 
@@ -1638,3 +1703,153 @@ IR designed to support dynamic optimizations at runtime.
 clang++ -Xclang -dump-tokens -fsyntax-only  task.cpp    # to see Lexer
 clang++ -Xclang -ast-dump -fsyntax-only  task.cpp    # to see AST
 ```
+
+# Lecture 10.1 - Sanitizers
+
+## ASan (AddressSanitizer)
+
+Detects memory errors, including:
+
+- Heap-use-after-free
+
+- Stack-use-after-return
+
+- Stack-use-after-scope
+
+- Global/Stack/Heap _buffer overflow_
+
+- Use of uninitialized or freed memory
+
+```bash
+clang -fsanitize=address
+```
+
+- ~2-3x slower & increased memory usage.
+
+### How it works
+
+ASan inserts "**red zones**" around memory allocations.
+
+Uses a "shadow memory" to track which bytes of memory are valid.
+
+On each memory access, ASan checks the shadow memory to ensure safety.
+
+## LSan (LeakSanitizer)
+
+Detects memory leaks.
+
+```bash
+clang -fsanitize=leak
+```
+
+In linux LSan is included into ASan.
+
+- Minimal additional overhead.
+
+### How it works
+
+Tracks memory allocations and checks if they are still reachable at program exit.
+
+## MSan (MemorySanitizer)
+
+Detects uses of uninitialized memory.
+
+```bash
+clang -fsanitize=memory
+```
+
+- 2x-4x slower & increased memory usage.
+
+### How it works
+
+Uses shadow memory to track the initialized state of each byte.
+
+## TSan (ThreadSanitizer)
+
+Detects data races and other threading bugs.
+
+```bash
+clang -fsanitize=thread
+```
+
+~5x-20x slower & increased memory consumption
+
+### How it works
+
+Uses a variant of the Happens-Before relationship to detect race conditions.
+
+## UBSan (UndefinedBehaviorSanitizer)
+
+Detects undefined behavior in C and C++.
+
+Examples of errors detected:
+
+- Integer overflow
+- Null pointer dereference
+- Misaligned pointer access
+- Divide by zero
+- Invalid shift operations
+- Signed integer overflow
+- Use of incorrect types in unions
+
+```bash
+clang -fsanitize=undefined
+```
+
+- Minimal additional overhead.
+
+# Lecture 10.2 - Profilers
+
+[Poor Man Profiler](https://poormansprofiler.org/): For a poor developer to understand what a program is doing, he needs to see stacks.
+
+A lot of stack screenshots $\to$ approximation of usage $\to$ **flame graph**:
+
+![alt text](notes_images/flame_graph.png)
+
+In linux use `perf` - performance counter:
+
+```bash
+sudo perf stat
+sudo perf top
+sudo perf top -F 100
+sudo perf top -c 10000
+```
+
+## `-ffast-math`
+
+```cpp
+double foo(double a, double b, double c, double d) {
+    return a * b * c * d;
+}
+
+double boo(double a, double b, double c, double d) {
+    return (a * b) * (c * d);
+}
+```
+
+compiles into
+
+```asm
+foo(double, double, double, double):
+    mulsd   xmm0, xmm1
+    mulsd   xmm0, xmm2
+    mulsd   xmm0, xmm3
+    ret
+
+boo(double, double, double, double):
+    mulsd   xmm0, xmm1
+    mulsd   xmm2, xmm3
+    mulsd   xmm0, xmm2
+    ret
+```
+
+`-ffast-math` makes `foo` compile like `boo`.
+
+---
+
+branch prediction
+branch misses
+
+`[[unlikely]]`
+
+![alt text](notes_images/likely.png)

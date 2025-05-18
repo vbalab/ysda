@@ -1,0 +1,94 @@
+\RequirePackage[X2,T2A]{fontenc}
+\RequirePackage[utf8]{inputenc}
+\RequirePackage[russian]{babel}
+\RequirePackage{expdlist}
+\RequirePackage{amsmath}
+
+
+\newcounter{problem}
+\renewcommand{\theproblem}{\groupnumber-\arabic{problem}}
+\newcommand{\problemname}{Задача}
+
+\newenvironment{problem}[1]{
+    \addtocounter{problem}{1}\noindent{\large\bfseries \problemname{} \theproblem \, (#1
+    баллов).}
+}{
+    \par\bigskip
+}
+
+\newenvironment{solution}{
+    {\bfseries Решение.}
+}{
+    \par\bigskip
+}
+
+\newenvironment{comment}{
+    {\bfseries Комментарии по проверке.}
+}{
+    \par\bigskip
+}
+
+
+
+\def\s@tm@cr@s{
+    \def\widthin##1{\exmpwidinf=##1\relax}
+    \def\widthout##1{\exmpwidouf=##1\relax}
+    \def\stretchin##1{\advance\exmpwidinf by ##1\relax}
+    \def\stretchout##1{\advance\exmpwidouf by ##1\relax}
+    \@ifstar{
+        \error Star must not be used in example environment any more
+    }
+}
+
+\newenvironment{example}[1][]{
+    \s@tm@cr@s#1
+    \ttfamily\obeylines\obeyspaces\frenchspacing
+    \newcommand{\exmp}[2]{
+        \begin{minipage}[t]{0.43\textwidth}\rightskip=0pt plus 1fill\relax##1\medskip\end{minipage}&
+        \begin{minipage}[t]{0.43\textwidth}\rightskip=0pt plus 1fill\relax##2\medskip\end{minipage}\\
+        \hline
+    }
+
+    \medskip
+    \begin{tabular}{|l|l|}
+    \hline
+    Пример входа & Пример выхода \\
+    \hline
+}{
+    \end{tabular}
+}
+
+\textwidth=440pt
+\textheight=600pt
+\hoffset=-43pt
+\headsep=25pt
+\footskip=40pt
+
+\makeatletter
+
+%---------- From package "lastpage" ------------------
+\def\lastpage@putlabel{\addtocounter{page}{-1}%
+   \immediate\write\@auxout{\string\newlabel{LastPage}{{}{\thepage}}}%
+   \addtocounter{page}{1}}
+\AtEndDocument{\clearpage\lastpage@putlabel}%
+%---------- end of "lastpage" ------------------
+
+\renewcommand{\@oddhead}{%
+    \parbox{\textwidth}{%
+        \sffamily
+        \begin{center}
+             <<Алгоритмы и структуры данных>> (версия от \today) \\[2pt]
+            \hrule%
+        \end{center}
+    }%
+}
+
+\renewcommand{\@oddfoot}{%
+    \parbox{\textwidth}{%
+        \hrule%
+        \vspace{6pt}%
+        \sffamily{{\hfil}Страница \thepage\space из \pageref{LastPage}\hfil}}%
+}%
+
+\makeatother
+
