@@ -479,3 +479,140 @@ So each feature has $k$ random splits $t_k$ to choose from.
 - `min_samples_split` (default value = 2);
 - `min_samples_leaf` (default value = 1);
 - `max_depth` — maximum tree depth (default value = 3).
+
+# Lecture 10 - Intro in DL
+
+## Activation Function
+
+Fun fact: We really have smth like activation functions in our brain: ReLU, sigmoid.
+
+ReLU might give 0 gradient $\to$ Leaky ReLU, ELU, GELU, SiLU **but** they are harder to compute.  
+
+Use ReLU as baseline.
+
+> Use **GELU**, because it's like ReLU, but has non-zero gradient near 0.
+
+## Adversial Attack
+
+![AA](notes_images/adversial_attack.png)
+
+# Lecture 12 - smth in DL
+
+**Epoche** - one full pass through the entire training dataset.  
+Example: If you have 10,000 samples and batch size = 100 $\to$ 1 epoch = 100 updates.
+
+## Optimization Algorithms
+
+$|B|$ - batch, $|W|$ - weights.
+
+1. **SGD**:
+
+    $$
+    \theta_{t+1} = \theta_t - \eta \nabla_\theta L_t
+    $$
+
+    By memory: $|B| + |W|$
+
+2. **Momentum**: adds velocity
+
+    $$
+    v_{t+1} = \beta v_t + \nabla_\theta L_t
+    $$
+
+    $$
+    \theta_{t+1} = \theta_t - \eta v_{t+1}
+    $$
+
+    By memory: $|B| + 2 |W|$
+
+3. **Adagar**: scales learning rate by past gradients (so if gradients are small, we're learning faster)
+
+    $$
+    G_{t+1} = G_t + (\nabla_\theta L_t)^2
+    $$
+
+    $$
+    \theta_{t+1} = \theta_t - \frac{\eta}{\sqrt{G_{t+1}} + \epsilon} \nabla_\theta L_t
+    $$
+
+    By memory: $|B| + 2 |W|$
+
+    Even for Adagar learning rate _matters_.
+
+4. **Adam**: Momentum + Adagar
+
+    $$
+    m_{t+1} = \beta_1 m_t + (1 - \beta_1) \nabla_\theta L_t
+    $$
+
+    $$
+    v_{t+1} = \beta_2 v_t + (1 - \beta_2) (\nabla_\theta L_t)^2
+    $$
+
+    $$
+    \hat{m}_{t+1} = \frac{m_{t+1}}{1 - \beta_1^{t+1}}, \quad \hat{v}_{t+1} = \frac{v_{t+1}}{1 - \beta_2^{t+1}}
+    $$
+
+    $$
+    \theta_{t+1} = \theta_t - \eta \frac{\hat{m}_{t+1}}{\sqrt{\hat{v}_{t+1}} + \epsilon}
+    $$
+
+    By memory: $|B| + 3 |W|$
+
+> Generally: Use Adam  
+> Not enough memory: Use SGD with increased $|B|$ and learning rate.
+
+**Learning rate decay** - technique used to gradually reduce the learning rate during training.
+
+## Normalization & Batch Normalization
+
+### Normalization
+
+Always **normalize** your inputs in the model.  
+Also it helps with:
+
+- **gradient explosion**
+- _regularizations_
+- _scaling issues_, like ones in kNN when delaing with features of different scale.
+- dealing with _activation functions_ when training
+- floats in PLs have better _grid near 0_
+
+### Batch Normalization
+
+**BatchNorm** normalizes layer inputs to stabilize training that suffers from **internal covariate shift**.
+
+1. Compute batch mean and variance:
+
+    $$
+    \mu_B = \frac{1}{m} \sum_{i=1}^{m} x_i, \quad 
+    \sigma_B^2 = \frac{1}{m} \sum_{i=1}^{m} (x_i - \mu_B)^2
+    $$
+
+2. Normalize:
+
+    $$
+    \hat{x}_i = \frac{x_i - \mu_B}{\sqrt{\sigma_B^2 + \epsilon}}
+    $$
+
+3. Scale & Shift
+
+    $$
+    \hat{y}_i = \gamma \hat{x}_i + \beta
+    $$
+
+    To prevent from:  
+    ![BN](notes_images/batch_normalization.png)
+
+## Regularization
+
+L1, L2, ElasticNet
+
+### Dropout
+
+![BN](notes_images/dropout.png)
+
+### Data Augmentation
+
+Text augmentations.
+
+Use `albumentations` library for CV.

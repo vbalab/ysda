@@ -2,3 +2,11 @@
 *.gdb_history
 *videos/
 *.vscode/
+*smeshnyavky/
+*review/
+*reviews/
+*.cpp
+*.ipynb
+*vbalab/
+*concur/
+*preparation/

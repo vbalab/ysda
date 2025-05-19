@@ -246,7 +246,6 @@ bool VisitCXXRecordDecl(CXXRecordDecl* decl);
 
 if it encounters a `CXXRecordDecl` node.
 
-
 # Lecture 1 - Metaprogramming
 
 **Metaprogramming** - writing code that can generate/manipulate other code as data at _compile time_, rather than at runtime.
@@ -1704,7 +1703,7 @@ clang++ -Xclang -dump-tokens -fsyntax-only  task.cpp    # to see Lexer
 clang++ -Xclang -ast-dump -fsyntax-only  task.cpp    # to see AST
 ```
 
-# Lecture 10.1 - Sanitizers
+# Lecture 10 - Sanitizers
 
 ## ASan (AddressSanitizer)
 
@@ -1798,7 +1797,7 @@ clang -fsanitize=undefined
 
 - Minimal additional overhead.
 
-# Lecture 10.2 - Profilers
+# Lecture 11 - Profilers
 
 [Poor Man Profiler](https://poormansprofiler.org/): For a poor developer to understand what a program is doing, he needs to see stacks.
 
@@ -1853,3 +1852,36 @@ branch misses
 `[[unlikely]]`
 
 ![alt text](notes_images/likely.png)
+
+# Lecture 12 - Functional Programming
+
+**Pure function** - function's return is fully determined by the arguments.
+
+**Purely functional PL** doesn't have dirty functions at all. (like `random` or `std::cin`)
+
+Functional PL great at **composing** functions, because of predetermined sequence of outputs.
+
+> C++ is functional PL mainly because it has lambdas and functions that return functions.
+
+## Functor
+
+This is different from from C++'s defition of functor.
+
+Functor is object that has `fmap` function that satisfies:
+
+1. ```cpp
+    template <typename T, typename A, typename B>
+    T<B> fmap(std::function<B(A)> op, T<A>);
+    ```
+
+2. ```hs
+    fmap id = id
+    ```
+
+3. ```hs
+    fmap (f . g) = fmap f  . fmap g
+    ```
+
+## Monad
+
+// 0:40:00
