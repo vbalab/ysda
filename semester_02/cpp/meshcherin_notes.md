@@ -132,6 +132,25 @@ x = 1;              // here `=` is assignment operator
 
 Once reference like `int& r = x` is called, r _cannot_ be changed what to reference $\to$ references has to be initialized.
 
+### References: Object VS Variable VS Function VS Method
+
+```cpp
+sizeof(int*);   // 8
+
+int a;
+sizeof(&a);     // 8
+
+void f() {}
+sizeof(&f);     // 8
+
+struct A {
+  void f() {}
+};
+sizeof(&A::f);  // 16 !!!
+```
+
+**Pointer-to-member-function** may include both code pointer & **this-adjustment offset** to support multiple inheritance and virtual functions.
+
 ## `void*`
 
 `void*` — generic pointer type — it can point to any type of data, but knows nothing about the type.
@@ -252,6 +271,8 @@ f(x) = 10;
 
 # Lecture 10 - Constants
 
+`const`-**qualified** object type restricts access to only those member _methods and operators_ that are also `const`-qualified.
+
 ## `const`
 
 ```cpp
@@ -311,7 +332,11 @@ void f(const T& val);
 void f(T&& val);
 f(1);
 
+// ---
+
 int& ref = 1;           // CE
+void f(T& val);
+f(1);                   // CE
 ```
 
 ## Typical Arguments
@@ -560,3 +585,372 @@ In cases where other constructors exist, explicitly declaring an implicit constr
 - `ClassName`             // doing extra copy that is unused
 
 - `const ClassName&`      // because we want to support `(a = b) = c`;
+
+# Lecture 15 - `const`, `mutable`, `static`, `explicit`
+
+## Type Cast Operator
+
+`operator target_type() const;`
+
+```cpp
+class Number {
+public:
+    Number(double v) : value(v) {}
+
+    operator double() const {
+        return value;
+    }
+
+    operator int() const {
+        return static_cast<value>;
+    }
+
+    explicit operator bool() const {
+        return value <= 0;
+    }
+
+private:
+    double value;
+};
+```
+
+`explicit` **forbids** implicit conversions $\to$ only via `static_cast`.
+
+> It's good practice to make conversion to `bool` explicit (for `if`).
+
+# Lecture 16 - Operator Overloading
+
+> Overload binary operators out of the class.
+
+## `+` & `+=`
+
+> Express overload of `+` through overload of `+=` to avoid extra copying.
+
+```cpp
+class Number {
+public:
+    Number() : value(0) {}
+
+    Number(double v) : value(v) {}
+
+    Number& operator+=(const Number& other) {
+        value = value + other.value;
+        return *this;
+    }
+
+private:
+    double value;
+};
+
+Number operator+(const Complex& left, const Complex& right) {
+    Complex result = left;
+    result += right;
+    return result;
+}
+
+Number x(1.0);
+x + 1.0;    // ok
+1.0 + x;    // ok
+```
+
+### rvalue assigning
+
+**TQ**:
+
+```cpp
+Number a, b, c;
+
+a + b = c;  // Ok, because `a + b` returns `Number`, but strange as fuck
+
+// to forbid that do:
+Complex& Complex::operator=(const Complex& other) & {... }
+// now we can assign only to lvalue
+```
+
+## `operator<=>`
+
+```cpp
+#include <compare>
+
+std::weak_ordering Number::operator<=>(const Number other) const = default;
+```
+
+# Lecture 17 - Enums, Inheritence
+
+## Enums
+
+Use `enum class`, because:
+
+- No implicit conversion to/from `int`
+
+- No global name pollution of enumerator's attributes
+
+## `public`, `protected`, `private`
+
+### Access Modifiers
+
+```cpp
+class A {
+public:     // to all
+    ...
+
+protected:  // to this & inheritor only (but not to inheritor of inheritor)
+    ...
+
+private:    // to this & friends
+    ...
+}
+```
+
+Access modifiers don't affect **scope resolution** (visibility) at all, only **accessibility**.
+
+When accessing smth: 1. In scope? $\to$ 2. Accessable?
+
+### Inheritance Semantics
+
+```cpp
+class Base {
+public:
+    int a;
+
+protected:
+    int b;
+
+private:
+    int c;
+};
+
+class PublicDerived : public Base {
+    void f() {
+        a = 1; // ✅ OK (public -> public)
+        b = 2; // ✅ OK (protected -> protected)
+        c = 3; // ❌ was private
+    }
+};
+
+class ProtectedDerived : protected Base {
+    void f() {
+        a = 1; // ✅ OK (public -> protected)
+        b = 2; // ✅ OK (protected -> protected)
+        c = 3; // ❌ was private
+    }
+};
+
+class PrivateDerived : private Base {
+    void f() {
+        a = 1; // ✅ OK (public -> private)
+        b = 2; // ✅ OK (protected -> private)
+        c = 3; // ❌ was private
+    }
+};
+
+int main() {
+    PublicDerived d1;
+    d1.a = 10; // ✅ OK
+    d1.b = 20; // ❌ protected
+    d1.c = 30; // ❌ private
+
+    ProtectedDerived d2;
+    d2.a = 10; // ❌ now protected
+
+    PrivateDerived d3;
+    d3.a = 10; // ❌ now private
+}
+```
+
+> Note that attributes of Derived are all **visible**, but some of them are not **accessible**.
+
+Example:
+
+```cpp
+class FancyVector : private std::vector<int> {
+public:
+    void PushBackTwo(int x, int y) {
+        push_back(x);
+        push_back(y);
+    }
+};
+```
+
+## `friend`
+
+`friend` is not inheritable.
+
+### best
+
+```cpp
+// class B;    // no need
+
+class A {
+    friend class B;
+}
+
+class B {
+}
+```
+
+### "строгая мама не разрешает общаться с доброй бабушкой"
+
+**TQ**:
+
+```cpp
+struct Granny {
+    friend struct Son;
+
+private:
+    int x;
+};
+
+struct Mom : protected Granny { // or `private`
+};
+
+struct Son : Mom {
+};
+
+int main() {
+    Son s;
+    s.x;    // CE
+}
+```
+
+# Lecture 18 - Inheritence
+
+## EBO
+
+**EBO** - Empty Base Optimization
+
+```cpp
+class Base {};          // sizeof(Base) == 1
+
+class Derived: Base {}; // sizeof(Derived) == 1
+
+
+class Derived: Base {   // sizeof(Derived) == sizeof(Derived::x) == 8
+    int64_t x;
+
+    void Method();      // methods weight nothing
+};
+```
+
+## Contructors
+
+```cpp
+struct Base {
+    int x;
+    // NO: Base() : x(0) {};
+    // NO: Base(int x) = default
+    Base(int x) : x(x) {}
+}
+
+struct Derived: Base {
+    double y;
+
+    Derived(double y) : Base(0), y(y) {}    // otherwise CE
+}
+```
+
+## Implicit Inheritence Cast
+
+```cpp
+class Derived: public Base {...}
+
+void c(Base base);  // slicing
+
+void r(Base& base);
+
+void p(Base* base);
+
+Derived d;
+c(d);       // OK: slicing
+r(d);       // OK: implicit cast to Base
+p(d);       // OK
+```
+
+**Slicing**: `Base` will be **sliced** out of `Derived` using `Base(const Base& b);` copy constructor (which can be default generated or manually implemented).
+
+# Lecture 19 - Multiple & Virtual Inheritence
+
+## Multiple Inheritence
+
+```cpp
+class A {
+    void f();
+    void g(int);
+}
+
+class B {
+    void f();
+    void g(double);
+};
+
+class C: public A, public B {};
+
+C c;        // in memory: A B C
+c.f();      // CE
+c.g(1);     // OK
+c.g(1.0)    // OK
+```
+
+Methods of base classes get overloaded with each other in derived class.
+
+## Diamond Problem
+
+```txt
+  A
+ / \
+B   C
+ \ /
+  D
+```
+
+```cpp
+class A {
+public:
+    void f();
+};
+
+class B : public A {};
+class C : public A {};
+
+class D : public B, public C;
+
+D d;        // in memory: |A| |B| |A| |C| |D|
+
+d.f();      // CE
+d.A;        // CE, it should be: `d.B::A;` or `d.C::A;`
+A& a = d;   // CE
+```
+
+### Solution
+
+With **`virtual` inheritance**, D contains only one instance of A, shared by B and C.
+
+```cpp
+class A {
+public:
+    void f();
+};
+
+class B : virtual public A {};
+class C : virtual public A {};
+
+class D : public B, public C {};
+
+D d;        // in memory: |ptr of B on A| |B| |ptr of C on A| |C| |D| |A|
+
+d.f();      // OK
+d.A;        // OK
+A& a = d;   // OK
+```
+
+## Virtual Table
+
+**Virtual table** - lookup table of function pointers - static, per-class array of function pointers pointing to the most derived overrides of the virtual functions.
+
+A class gets a **vtable** if:
+
+- has at least one `virtual` function.
+
+- not marked `final`
+
+# Lecture 20 - 

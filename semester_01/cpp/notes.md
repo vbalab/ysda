@@ -412,11 +412,11 @@ MyStruct s2;                    // init_count = 2
 Mystruct::smth();
 ```
 
-## `public` & `private`; `friend`
+## `friend`
 
-By default: in class all private, in struct all public.
+By default: in class all `private`, in struct all `public`.
 
-Use **friend** for public methods that want to get private/protected members.  
+Use **friend** for `public` methods that want to get `private`/`protected` members.  
 Also, it allows to use them to another object of the same type.
 
 ```cpp
@@ -1400,37 +1400,6 @@ class Button : public Clickable, public Rectangle { ... };
 class ExecutionContext final : private ITrampoline { ... }
 ```
 
-## Access Modifiers
-
-```cpp
-class A {
-public:     // to all
-    ...
-protected:  // to inheritors
-    ...
-private:    // to this and friends
-    ...
-}
-```
-
-### Inheritance Semantics
-
-When a class inherits privately, all public and protected members of the base class become private members of the derived class.
-
-- `public` — interface inheritance
-- `private` — implementation inheritance (better to use composition)
-- `protected` — practically unused
-
-```cpp
-class FancyVector : private std::vector<int> {
-public:
-    void PushBackTwo(int x, int y) {
-        push_back(x);
-        push_back(y);
-    }
-};
-```
-
 ## Polymorphism
 
 ### Static Polymorphism
@@ -1441,6 +1410,13 @@ public:
 ### Dynamic Polymorphism
 
 - **virtual** & **override**: Functions that are declared in a base class and overridden in derived classes:
+
+`= 0` makes a virtual function **pure virtual** — any subclass must implement this function.  
+With `= 0` virtual class can't be initialized.
+
+- **Abstract Base Class** - class that has pure virtual method.
+
+- **Polymorthic Class** - class with virtual, but no pure virtual.
 
 ```cpp
 // `I` - interface
@@ -1462,10 +1438,6 @@ public:
     };
 };
 ```
-
-`= 0` makes a virtual function **pure virtual** — any subclass must implement this function.  
-With `= 0` virtual class can't be initialized.  
-It turns the class into an **abstract base class**.
 
 # Lecture 9 - Exceptions
 

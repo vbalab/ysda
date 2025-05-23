@@ -497,18 +497,18 @@ concept SerializableToJson = IsSerializableToJson<T>::value;
 
 4. **Name hiding** - by default, when a derived class declares a function with the same name as a function in the base class, all overloads of that function from the base class are hidden.
 
-   `using Parent::Func` unhides all `Parent` functions `Func` from derived class.
+   `using Base::Func` unhides all `Base` functions `Func` from derived class.
 
    ```cpp
-   class Parent {
+   class Base {
    public:
        void display();
        void display(int x);
    };
 
-   class Derived : public Parent {
+   class Derived : public Base {
    public:
-       using Parent::display;  // Brings Parent::display() and Parent::display(int) into Derived's scope
+       using Base::display;  // Brings Base::display() and Base::display(int) into Derived's scope
 
        void display(double d) { ... }
    };

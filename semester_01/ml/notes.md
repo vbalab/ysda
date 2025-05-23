@@ -616,3 +616,66 @@ L1, L2, ElasticNet
 Text augmentations.
 
 Use `albumentations` library for CV.
+
+# Lecture 13 - RNN
+
+## RNN
+
+Idea:
+
+Let the hidden state be initialized as:
+
+$$
+h_0 = \bar{0}
+$$
+
+The recurrence for hidden states is defined as:
+
+$$
+h_1 = \sigma(\langle W_{\text{hid}}[h_0, x_0] \rangle + b)
+$$
+
+$$
+h_2 = \sigma(\langle W_{\text{hid}}[h_1, x_1] \rangle + b) = \sigma(\langle W_{\text{hid}}[\sigma(\langle W_{\text{hid}}[h_0, x_0] \rangle + b), x_1] \rangle + b)
+$$
+
+$$
+h_{i+1} = \sigma(\langle W_{\text{hid}}[h_i, x_i] \rangle + b)
+$$
+
+The output distribution is computed as:
+
+$$
+P(x_{i+1}) = \text{softmax}(\langle W_{\text{out}}, h_i \rangle + b_{\text{out}})
+$$
+
+> But $h_0$ can be not 0, but some task specific context.
+
+## Vanilla RNN
+
+Vanilla RNN uses $\tanh$, because $h_t$ should be i.i.d. $\to$ can't use ReLU (ReLU + BatchNorm is okay).
+
+![BN](notes_images/rnn.png)
+
+## LSTM
+
+![BN](notes_images/lstm.png)
+
+1. what to forget
+
+2. what to remember
+
+3. what to add
+
+![BN](notes_images/lstm_overview.png)
+
+![BN](notes_images/lstm_math.png)
+
+LSTM:
+
+1. Provides long-term context for current token
+
+2. Solves the problem of **vanishing gradient**, because **cell state** has no $\tanh$ or similar.
+
+# Lecture 14 - Markov Property, RNN
+
