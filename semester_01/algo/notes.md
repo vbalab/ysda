@@ -1,4 +1,4 @@
-<!-- markdownlint-disable MD001 -->
+<!-- markdownlint-disable MD001, MD025 -->
 
 # Practice
 

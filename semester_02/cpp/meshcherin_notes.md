@@ -71,25 +71,31 @@ int32_t x = 0;
 int main() {
     int32_t x =         x;  // warning: variable 'x' is uninitialized when used within its own initialization -> UB
                 // . here `x` is already declared, but not initialized and we initialize it with itself
-    // so it's the same as:
-    // int32_t x;
-    // but UB of using uninitialized memory :)
 }
 ```
 
-# Lecture 4 - Statements & Operators
+# Lecture 4 - Statements, Operators
 
 ## `operator`
 
 Left-Associative Operators:
 
-- Overloadable globally: `()` `[]` `->` `->*` `*` `/` `%` `+` `-` `<<` `>>` `<` `<=` `>` `>=` `==` `!=` `&` `^` `|` `&&` `||` `,`
+- Overloadable: `()` `[]` `->` `->*` `*` `/` `%` `+` `-` `<<` `>>` `<` `<=` `>` `>=` `==` `!=` `&` `^` `|` `&&` `||` `,`
 
-- Overloadable only within class: `::` `.` `.*`
+- Cannot be overloaded: `::` `.` `.*`
 
 Right-Associative Operators:
 
-- Overloadable globally: `++` `--` `+` `-` `!` `~` `*` `&` `=` `+=` `-=` `*=` `/=` `%=` `>>=` `<<=` `&=` `^=` `|=` `new` `delete`
+- Overloadable: `++` `--` `+` `-` `!` `~` `*` `&` `=` `+=` `-=` `*=` `/=` `%=` `>>=` `<<=` `&=` `^=` `|=`
+
+`new` `delete` are overloadble.
+
+### `++a` & `a++`
+
+```cpp
+ClassName& operator++();                // ++a
+ClassName operator++(/*dummy*/ int);    // a++
+```
 
 ### Priority
 
@@ -97,11 +103,13 @@ Right-Associative Operators:
 
 **TQ**:
 
-1. `++a++` $\equiv$ `++(a++)` $\leftarrow$ is not allowed (`...++` takes lvalue, but after first `..++` we get rvalue)
+1. `++a++` $\equiv$ `++(a++)` $\leftarrow$ is not allowed (`++...` takes lvalue, but after first `..++` we get rvalue)
 
-2. `a+++b` $\equiv$ `(a++) + b` $\leftarrow$ okay!
+2. `a++++` $\equiv$ `(a++)++` $\leftarrow$ is not allowed (`...++` takes lvalue, but after first `..++` we get rvalue)
 
-3. `a++++` $\leftarrow$ is not allowed (`...++` takes lvalue, but after first `..++` we get rvalue)
+3. `a+++b` $\equiv$ `(a++) + b` $\leftarrow$ okay!
+
+4. `++++a` $\equiv$ `++(++a)`$\leftarrow$ okay!
 
 ## Random
 
@@ -130,26 +138,26 @@ x = 1;              // here `=` is assignment operator
 
 ## Reference
 
-Once reference like `int& r = x` is called, r _cannot_ be changed what to reference $\to$ references has to be initialized.
+Once reference like `int& r = x` is called, `r` _cannot_ be re-binded $\to$ references has to be initialized.
 
-### References: Object VS Variable VS Function VS Method
+### Reference types
 
 ```cpp
-sizeof(int*);   // 8
+sizeof(int*);   // to Object: 8
 
 int a;
-sizeof(&a);     // 8
+sizeof(&a);     // to Variable: 8
 
 void f() {}
-sizeof(&f);     // 8
+sizeof(&f);     // to Function: 8
 
 struct A {
   void f() {}
 };
-sizeof(&A::f);  // 16 !!!
+sizeof(&A::f);  // to Member Function: 16 !!!
 ```
 
-**Pointer-to-member-function** may include both code pointer & **this-adjustment offset** to support multiple inheritance and virtual functions.
+**Pointer-to-member-function** may include both code pointer & **this-adjustment offset** to support **multiple inheritance** and `virtual` functions.
 
 ## `void*`
 
@@ -157,17 +165,35 @@ sizeof(&A::f);  // 16 !!!
 
 `void*` cannot be dereferenced.
 
-## C libraries
+## Standard Libraries
 
-**TQ**: why we use `int32_t` just like that if we include it with `<cstdint>`?
+### C libraries
+
+**TQ**: why we use `int32_t` without some `cstd::` if we include it with `<cstdint>`?
 
 `int32_t` is from `<cstdint>`, so from C standard library, but it doesn't need anything like `cstd::`, because C had _no namespaces_, so everything from C standard library is _global_.
+
+However, this is in contrast to `<cstdlib>`, `<cmath>`, `<ctime>`, etc., which _place_ functions in `std::`.
+
+### `std` Implementations
+
+C++ Standard Library:
+
+- many `std::` are defined by the ISO standard — all compilers _must_ provide them
+
+- The standard defines **interfaces**, not **implementations**
+
+Library Variants:
+
+- **GCC** $\to$ `libstdc++`  
+- **Clang** $\to$ `libstdc++` or `libc++`  
+- **MSVC** $\to$ Microsoft STL  
 
 # Lecture 7 - Stack, Static, Heap Memory
 
 ---
 
-# Lecture 8 - Arrays & Function Pointers
+# Lecture 8 - Arrays, Function Pointers
 
 ## Arrays
 
@@ -180,7 +206,11 @@ int arr[3]{1, 2, 3};
 
 *arr  == arr[0];                                // **array-to-pointer conversion**
 
-arr[2] == *(arr + 2) == *(2 + arr) = 2[arr];    // !!!
+// the same:
+arr[2];
+*(arr + 2);
+*(2 + arr);
+2[arr];
 
 int* p = a + 1;
 p[-1];                                          // totally okay, same as *((a + 1) - 1)
@@ -279,7 +309,7 @@ f(x) = 10;
 const int x;    // CE: uninitialized `const`
 ```
 
-## `T* const` && `const T*`
+## `T* const` & `const T*`
 
 **TQ**: difference between `const int*` and `int* const`
 
@@ -353,7 +383,7 @@ void f(const T val);    // don't do this shit :)
 
 ## Typecasts
 
-### 1. `static_cast<T>(expr)`
+### 1. `static_cast<T>`
 
 - Compile-time type conversion
 - safe-ish
@@ -369,7 +399,7 @@ Base* b = new Derived();
 Derived* d = static_cast<Derived*>(b); // OK if you're sure
 ```
 
-### 2. `reinterpret_cast<T>(expr)`
+### 2. `reinterpret_cast<T>`
 
 - Bit-level reinterpretation of memory.
 - Ignores types completely
@@ -383,9 +413,9 @@ char* cp = reinterpret_cast<char*>(ip); // View int memory as bytes
 
 > Avoid using it. Causes UB when byte structure is different.
 
-### 3. `dynamic_cast<T>(expr)`
+### 3. `dynamic_cast<T>`
 
-- Safe RTTI-based cast for polymorphic types.
+- Safe **RTTI**-based cast for polymorphic types.
 
 - Only works if the base class has at least one `virtual` function
 - Returns `nullptr` on failure (for pointers)
@@ -393,12 +423,12 @@ char* cp = reinterpret_cast<char*>(ip); // View int memory as bytes
 
 Use it for:
 
-- Downcasting polymorphic pointers
+- **Downcasting** polymorphic pointers
 - Checking cast validity at runtime
 
 ```cpp
 Base* b = new Derived();
-Derived* d = dynamic_cast<Derived*>(b); // Works if actually Derived*
+Derived* d = dynamic_cast<Derived*>(b); // Works if actually Derived*, otherwise RE
 ```
 
 Counter-example:
@@ -410,7 +440,7 @@ A* a = new B;
 B* b = dynamic_cast<B*>(a); // Compile error!
 ```
 
-### 4. `const_cast<T>(expr)`
+### 4. `const_cast<T>`
 
 - Adds or removes `const` / `volatile` qualifiers.
 
@@ -420,7 +450,7 @@ B* b = dynamic_cast<B*>(a); // Compile error!
 const int x = 10;
 int* px = const_cast<int*>(&x);     // ⚠️ Legal, but modifying is UB
 
-void func(char* p);
+void func(char*);
 const char* s = "hello";
 func(const_cast<char*>(s));         // OK if func doesn’t write to s
 ```
@@ -471,17 +501,6 @@ Cast to pointer $\to$ just changes the interpretation of the memory address with
 
 Often used for:  
 **Upcasting** for polymorphic behavior, **downcasting** with `dynamic_cast`.
-
-## Standard Library
-
-We know that at the preprocessing stage each header gets included in the file like text.  
-We also know that C++ compiling is pretty slow.  
-**TQ**: why headers from standard library don't take compilation time?
-
-The _definitions_ of standard library are **precompiled** and stored in static libraries (`.a` or `.lib` files) or dynamic/shared libraries (`.so`, `.dll`, or `.dylib` files), rather than being compiled each time to raw object files (`.o` or `.obj`).
-
-At the preprocessing stage `<iostream>` will expand into the file only _declarations_ to which _definitions_ are already precompiled. So, the only linker will take time for compiling `<iostream>`.  
-That's why it is `<iostream>` and not `"iostream"` to tell the compiler that these includes are from standard library.
 
 > # PART 2: OOP
 
@@ -542,7 +561,7 @@ Compiler automatically generates a default implementation for it.
 ```cpp
 class A {
     ...
-public: 
+public:
     A(...) = default;
 
     A(const A&) = default;
@@ -567,12 +586,12 @@ In cases where other constructors exist, explicitly declaring an implicit constr
 
 3. `delete`
 
-    ```cpp
-    template <typename T>
-    void f(T&& val);
+   ```cpp
+   template <typename T>
+   void f(T&& val);
 
-    void f(int val) = delete;
-    ```
+   void f(int val) = delete;
+   ```
 
 ---
 
@@ -580,11 +599,11 @@ In cases where other constructors exist, explicitly declaring an implicit constr
 
 **TQ**: In Copy Assignment Operator why do we return `ClassName&` and not:
 
-- `void`                  // because we want to support `(a = b) = c`;
+- `void` // because we want to support `(a = b) = c`;
 
-- `ClassName`             // doing extra copy that is unused
+- `ClassName` // doing extra copy that is unused
 
-- `const ClassName&`      // because we want to support `(a = b) = c`;
+- `const ClassName&` // because we want to support `(a = b) = c`;
 
 # Lecture 15 - `const`, `mutable`, `static`, `explicit`
 
@@ -642,8 +661,8 @@ private:
     double value;
 };
 
-Number operator+(const Complex& left, const Complex& right) {
-    Complex result = left;
+Number operator+(const Number& left, const Number& right) {
+    Number result = left;
     result += right;
     return result;
 }
@@ -660,12 +679,16 @@ x + 1.0;    // ok
 ```cpp
 Number a, b, c;
 
-a + b = c;  // Ok, because `a + b` returns `Number`, but strange as fuck
-
-// to forbid that do:
-Complex& Complex::operator=(const Complex& other) & {... }
-// now we can assign only to lvalue
+a + b = c;  // Ok, because `a + b` returns `Number`, but _strange as fuck_
 ```
+
+To **forbid** it:
+
+```cpp
+Number& Number::operator=(const Number& other) & {...}  // now we can assign only to lvalue
+```
+
+C++ built-in primitives like `int32_t` forbid it via `(...) & {...}`.
 
 ## `operator<=>`
 
@@ -688,6 +711,8 @@ Use `enum class`, because:
 ## `public`, `protected`, `private`
 
 ### Access Modifiers
+
+They are _purely compile time_.
 
 ```cpp
 class A {
@@ -828,7 +853,7 @@ class Derived: Base {}; // sizeof(Derived) == 1
 class Derived: Base {   // sizeof(Derived) == sizeof(Derived::x) == 8
     int64_t x;
 
-    void Method();      // methods weight nothing
+    void Method();      // _non-virtual_ methods weight nothing
 };
 ```
 
@@ -953,4 +978,630 @@ A class gets a **vtable** if:
 
 - not marked `final`
 
-# Lecture 20 - 
+# Lecture 20 - `virtual`
+
+## Destructor
+
+> Make your base desrtuctor `virtual`
+
+```cpp
+class A {
+public:
+    // virtual ~A() = default;
+    virtual ~A() {
+        std::cout << "~A";
+    }
+};
+
+class B : public A {
+public:
+    ~B() {
+        std::cout << "~B";
+    }
+};
+
+A* a = new B{};
+delete a;   // "~B~A", without `virtual` only "~A"
+```
+
+---
+
+## Access modifiers, `virtual`
+
+- Access modifiers are _purely compile time_.
+
+- `virtual`ity is _runtime_ thing.
+
+> `virtual` doesn't account for access at all
+
+**TQ:**: which method will be used?
+
+```cpp
+class A {
+public:
+    virtual int f() const {
+        return 1;
+    }
+};
+
+class B : public A {
+private:
+    int f() const override {
+        return 2;
+    }
+};
+
+B b;
+A &a = b;
+a.f();     // 2, even though it's private!!
+```
+
+# Lecture 21 - RTTI
+
+## `dynamic_cast` vs `static_cast`
+
+If the cast is invalid:
+
+- `static_cast`: compiles and may cause _UB_
+
+- `dynamic_cast`
+
+  - for pointers: returns `nullptr` at _runtime_
+  - for references: throws `std::bad_cast` at _compile time_
+
+## RTTI
+
+**RTTI (Run-Time Type Information)** - enables the program to determine the actual type of a _polymorphic_ typed object at _runtime_.
+
+### vtable
+
+**Virtual table (vtable)** - statically allocated array for a _polymorthic class_ created at _compile time_.
+
+- vtable is **per class**, _shared_ among objects
+
+### vptr
+
+**Virtual pointer (vptr)** points to the vtable of the class that constructed the object (i.e., the object's **dynamic type**).
+
+- vptr is **per object**
+
+---
+
+**Dynamic dispatch** - _runtime_ resolution of virtual functions to call (base | derived).
+
+> Virtual calls are slightly _slower_ due to vptr lookup.
+
+### `type_id`
+
+- for non-poly classes: returns _static type_
+
+- for poly classes: performs _RTTI_ returns _dynamic type_
+
+```cpp
+#include <typeinfo>
+
+Base* b = new Derived();
+
+const std::type_info info = typeid(*b);
+info.name();
+```
+
+# Lecure 22 - Memory Layout of Polymorphic Objects
+
+**ABI (Application Binary Interface)** - how binary code is structured and interacts at the machine level.
+
+> Variable can't change the type. But, memory can hold different types over time.
+
+TODO
+
+---
+
+TODO
+
+Where to put
+
+```cpp
+// Non-copyable
+ThreadPool(const ThreadPool&) = delete;
+ThreadPool& operator=(const ThreadPool&) = delete;
+
+// Non-movable
+ThreadPool(ThreadPool&&) = delete;
+ThreadPool& operator=(ThreadPool&&) = delete;
+```
+
+> # PART 3: Templates
+
+# Lecture 23 - Templates, Specialization
+
+## Template Instantiation
+
+Templates are **instantiated** into _actual code_ (actual definitions with specific types) during the **parsing part** of compilation phase.
+
+**TQ**:
+
+```cpp
+template <typename T>
+void f(T, T) {}
+
+f(1, 1.0);  // CE - no matching function; 'T' ('int' vs. 'double')
+```
+
+> First `T` should be infered, only after that with an _actual code_ **conversions** can happen.
+
+### Template Return Type
+
+Template return type can't be infered, because it doesn't look to function's body.
+
+> Provide explicitely `<...>`; Use `auto` (mb with `decltype`)
+
+```cpp
+template <typename T, typename R>
+R f(T x) {
+    return x;
+}
+```
+
+## Class Template Specialization
+
+Classes have no overloads.
+
+Class can't be declared with other than given number of template parameters.
+
+```cpp
+template <typename T, typename U>
+class C;
+
+// Partial specialization
+// 1
+template <typename T>
+class C<T, T>;
+
+// 2
+template <typename T>
+class C<int, T>;
+
+// 3
+template <typename T>
+class C<int>;
+
+// Full specialization
+template <>
+class C<int, double>;
+```
+
+## Fuction Template Specialization & Overloads
+
+Functions have only full specialization and **overload** (_no_ partial specialization).
+
+> **Overload resolution** is performed before **template instantiation** and does not consider **specializations**, even if they are instantiated.
+
+```cpp
+template <typename T>
+void f(T);
+
+template <>
+void f/*<int>*/(int) {
+    std::cout << "<int>";
+}
+
+void f(int) {
+    std::cout << "int";
+}
+
+f<int>(1);  // "<int>"
+f(1);       // "int" - no ambiguity
+```
+
+> For C++ community: If partial specialization goes to overload, it's a bit stupid to have full specialization at all, why not just do an overload?
+
+### Overload Resolution Rules
+
+1. If an _exact match_ exists among non-template overloads $\to$ use it.
+
+2. Otherwise, consider both _template and non-template_ functions as candidates:
+
+   1. Deduce template arguments.
+
+   2. Apply implicit conversions as needed.
+
+   3. Rank all viable functions.
+
+3. Ranking of Conversions $\to$ Select the best viable candidate (**if not ambiguous**).
+
+4. If the best candidate is a template, then **instantiate** it.
+
+### Ranking of Conversions
+
+| Rank | Conversion Type             | Description                                                |
+| ---- | --------------------------- | ---------------------------------------------------------- |
+| 1️⃣   | **Exact Match**             | No conversion needed (`int → int`)                         |
+| 2️⃣   | **Promotion**               | Small type to larger type (`char → int`, `float → double`) |
+| 3️⃣   | **Standard Conversion**     | Conversions like `int → double`, `Derived* → Base*`        |
+| 4️⃣   | **User-Defined Conversion** | Uses a constructor or `operator` (e.g. `MyType(int)`)      |
+| 5️⃣   | **Ellipsis (`...`)**        | Varargs fallback, worst possible match                     |
+
+# Lecture 24 - Non-Type Parameters, Template Template Parameters
+
+## Non-Type parameters
+
+Non-Type parameters should be `constexpr` when supplied.
+
+```cpp
+template <typename T, size_t N, size_t M>
+class Matrix;
+
+template <typename T, size_t N>
+using SquareMatrix = Matrix<T, N, N>;
+
+template <typename T, size_t N, size_t K, size_t M>
+Matrix<T, N, M> operator*(const Matrix<T, N, K>& a, const Matrix<T, K, M>& b);
+```
+
+## Template Template Parameters
+
+```cpp
+template <typename T, template <typename, typename> typename Container = std::vector>
+class Stack {
+    Container<T, std::allocator<T>> container;
+};
+
+// this compiles with g++, but clang++ gives CE
+template <typename T, template <typename> typename Container>
+class Stack {
+    Container<T> container;
+};
+```
+
+# Lecture 25 - Dependent Names
+
+## Dependent Names
+
+### 1
+
+```cpp
+template <typename T>
+struct S {
+    using A = int;
+};
+
+template <>
+struct S<int> {
+    static constexpr int A = 0;
+};
+
+int x = 0;
+
+template <typename T>
+void f() {
+    // S<T>::A* x;
+    // ? declaration: int* x;
+    // ? expression:  0 * 0;
+    // Syntax parsing happens before template instantiation!
+    // -> As a rule any dependent name is **expression**, so it is `0 * 0`
+
+    // to make it parsed as a type:
+    typename S::A* x;
+}
+```
+
+### 2
+
+```cpp
+template <typename T>
+struct Base {
+    int x;
+};
+
+template <>
+struct Base<int> {};
+
+template <typename T>
+struct Derived: public Base<T> {
+    void f() {
+        // x;  - CE: use of undeclared identifier 'x'
+        ++this->x;
+        ++Base<T>::x;
+    }
+};
+```
+
+# Lecture 26 - CRTP, Exceptions
+
+## [CRTP](https://en.wikipedia.org/wiki/Curiously_recurring_template_pattern)
+
+```cpp
+template <typename Derived>
+class Base {
+public:
+    void interface() {
+        static_cast<Derived*>(this)->implementation();
+    }
+
+    // default fallback
+    void implementation();
+};
+
+class DerivedA : public Base<DerivedA> {
+public:
+    void implementation();
+};
+
+class DerivedB : public Base<DerivedB> {
+    // fallback will be used
+};
+
+DerivedA a;
+a.interface();  // DerivedA impl
+
+DerivedB b;
+b.interface();  // Base default impl
+```
+
+## Runtime Errors & Exceptions
+
+**Runtime errors**:
+
+1. cause core dumps (OS-level)
+2. throw **exceptions** (language-level)
+segmentation fault
+OS-level runtime errors _can't_ be `try`-`catch`ed:
+
+```cpp
+try {
+    int x;
+    std::cin >> x;
+    x = 1 / x;              // "Floating point exception" (but it's not C++ exception, but OS's one)
+
+    int* p = nullptr;       // "Segmentation fault"
+    *p = 1;
+} catch (...) {
+    // it won't catch any of those
+}
+```
+
+But Python does a lot of checking on language-level, making it slower, but we can catch them more easily.
+
+Catching exceptions is really expensive.
+
+# Lecture 27 - Exception Processing
+
+## Function `try` Block
+
+```cpp
+void f() try {
+    //
+} catch (...) {
+    //
+}
+```
+
+```cpp
+class A {
+    struct B {
+        B(int x) {
+            if (x == 0) {
+                throw;
+            }
+        }
+    }
+
+    C() try: x_(1), y_(0) {
+        //
+    } catch (...) {
+        //
+    }
+
+private:
+    B x_;
+    B y_;
+};
+```
+
+# Lecture 28 - Exception safety, `std::vector`
+
+## Exception Specification: `noexcept`
+
+```cpp
+void f() noexcept;
+
+void t() noexcept try {
+    //
+} catch (...) {
+    //
+}
+
+template <typename T>
+void p() noexcept(std::is_reference_v<T>);
+
+template <typename T>
+void q() noexcept(noexcept(p<T>()));
+// std::vector() noexcept(noexcept(Allocator()));
+```
+
+_Destructors_ are `noexcept` by default from C++11, to disable this, use `noexcept(false)`.
+
+## [Exception safety](https://en.cppreference.com/w/cpp/language/exceptions.html)
+
+**Strong exception guarantee** — If the function throws an exception, the state of the program is rolled back to the state just before the function call (for example, `std::vector::push_back`).
+
+## `reserve` of `std::vector`
+
+> **"How to implement `push_back` of vector"** - single greatest questions to know someone's level of C++ knowleadge.
+
+```cpp
+template <typename T>
+class Vector {
+public:
+    void Reserve(size_t newcap) {
+        if (newcap <= cap_) {
+            return;
+        }
+
+        // T* newarr = new T[newcap];
+        // but `T` might not have default constructor & we don't want to use it
+        T* newarr = reinterpret_cast<T*>(new char[newcap * sizeof(T)]);
+
+        size_t i = 0;
+        try {   // Strong Exception Guarantee
+            for (; i < size_; ++i) {
+                // newarr[i] = std::move(arr[i]);
+                // `newarr[i]`'s object of `T` type is invalid, so usage `operator=` is UB
+                new (newarr + i) T(std::move(arr_[i]));
+            }
+        } catch (...) {
+            for (size_t j = 0; j < i; ++j) {
+                (newarr + j)->~T();
+            }
+            delete[] reinterpret_cast<char*>(newarr);
+
+            throw;
+        }
+
+        for (size_t i = 0; i < size_; ++i) {
+            (arr_ + i)->~T();
+        }
+        delete[] reinterpret_cast<char*>(arr_);
+
+        arr_ = newarr;
+        cap_ = newcap;
+    }
+
+private:
+    T* arr_;
+    size_t cap_;
+    size_t size_;
+};
+```
+
+# Lecture 29 - `std::deque`, Iterators
+
+## `std::vector` Invalidation
+
+**TQ**:
+
+1. **Pointer invalidation** on potential reallocation
+
+    ```cpp
+    T* p = &vec[0];
+    vec.push_back(T());
+    *p;                     // UB
+    ```
+
+2. **Reference invalidation** on potential reallocation, because reference is stored as pointer internally
+
+    ```cpp
+    T& r = vec[0];
+    vec.push_back(T());
+    r;                      // UB
+    ```
+
+3. **Iterator invalidation** on potential reallocation, because `it` holds `T*`
+
+    ```cpp
+    std::vector<T>::iterator it = vec.begin();
+    vec.push_back(T());
+    *it;                    // UB
+    ```
+
+> `std::deque` doesn't invalidate on push.
+
+## Iterators
+
+Pointer is iterator, because it has `operator*`, `operator+`, `operator==`.  
+Smart pointers are not iterators, because they have no `operator+`.
+
+### Range-based `for`
+
+```cpp
+for (auto& val : v) {
+    val;
+}
+// it get's parsed as:
+std::vector<T>::iterator end = v.end();
+for (std::vector<T>::iterator it = v.begin(); it != end; ++it) {
+    auto& val = *it;
+}
+// so it just needs `begin` & `end`
+```
+
+## How to know template type?
+
+```cpp
+template <typename T>
+void Info(T) = delete;
+
+Info(...);  // throws error with specifying type `T`
+```
+
+### `std::vector<bool>`
+
+Doesn't store store `bool`s as a contiguous array, but rather stores as a bit mask.
+
+```cpp
+template <typename T>
+void f(T) = delete;
+
+std::vector<bool> v{true};
+f(v[0]);    // `std::_Bit_reference`, not `bool`
+```
+
+# Lecture 30 - Iterators, Adapters
+
+## `distance`
+
+```cpp
+// or do via concepts | SFINAE
+template <typename It>
+typename std::iterator_traits<It>::difference_type Distance(It begin, It end) {
+    if constexpr (std::is_base_of_v<std::random_access_iterator_tag,
+                                    typename std::iterator_traits<It>::iterator_category>) {
+        return end - begin;
+    }
+
+    size_t i = 0;   // will be casted
+    while (begin != end) {
+        ++begin;
+        ++i;
+    }
+    return i;
+}
+```
+
+## Adapters
+
+```cpp
+std::vector<int> vec{1, 2, 3};
+
+std::vector<int>::iterator it = vec.end();
+std::vector<int>::reverse_iterator rit = std::reverse_iterator(vec.end());
+```
+
+## Output Iterator
+
+```cpp
+std::vector<int> v;
+
+std::copy({1, 2, 3}, {1, 2, 3} + 3, std::back_inserter(v));
+
+std::ostream_iterator<int> out_it(std::cout, ", ");
+std::copy(v.begin(), v.end(), out_it);  // prints: 1, 2, 3,
+```
+
+# Lecture 31 - I/O stream
+
+`std::cin` & `std::cout` are tied, holding pointer to each other.  
+`cin`/`cout` before taking into buffer flush `cout`/`cin` by holding pointer.  
+We can **untie** by setting pointers to `nullptr`.
+
+The same way I/O of C++ synchronized with I/O of C.
+
+```cpp
+std::cin.tie(nullptr);  // untie `cout`
+std::cout.tie(nullptr); // untie `cin`
+
+std::cin.sync_with_stdio(false);    // untie from C
+std::cout.sync_with_stdio(false);   // untie from C
+```
+
+# Lecture 32 - `std::list`, `std::map`

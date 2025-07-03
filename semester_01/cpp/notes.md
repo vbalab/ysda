@@ -1,4 +1,4 @@
-<!-- markdownlint-disable MD024 MD049 -->
+<!-- markdownlint-disable MD024 MD025 MD049 -->
 
 # Set up
 
@@ -453,93 +453,7 @@ public:
 
 # Lecture 4.1 - Overloading & Templates
 
-## Function Overloading
-
-**Function overloading** - allows multiple functions to have the same name but different parameters
-
-```cpp
-void print(int i) {
-    std::cout << "Integer: " << i << '\n';
-}
-
-void print(const std::string& i) {
-    std::cout << "String: " << i << '\n';
-}
-
-template<typename T>
-void print(T t, int u) {
-    std::cout << "...: " << t << ", " << u << '\n';
-}
-```
-
-### Promotion
-
-**Promotion** - special case of conversion: larger but similar type.
-
-Promotion preffered to conversion:
-
-```cpp
-void f(int);
-void f(double);
-
-f(2f); // `float` -> promotion -> `double`
-```
-
-## `template`
-
-```cpp
-template<typename T>
-T MyMax(T a, T b) {}
-
-MyMax(4, 5);
-MyMax<int>(4, 5);       // explicit type indication
-
-template<typename T, typename U>
-T MyPrint(T a, U b) {}
-```
-
-## Template Specialization
-
-1. Full Template Specialization - creating a completely different implementation of a template for a specific type
-
-   ```cpp
-   template<typename T>
-   void print(T value) {
-       std::cout << "Generic template: " << value << '\n';
-   }
-
-   template<>
-   void print<int>(int value) {        // Full specialization for type `int`
-       std::cout << "Specialized template for int: " << value << '\n';
-   }
-   ```
-
-2. Partial Template Specialization (Not for Functions) - applies *only* to class templates, not to function templates (for them this is function overloading)
-
-    ```cpp
-    template<typename T, typename U>
-    class Example {};
-
-    // Partial specialization when the second parameter is `int`
-    template<typename T>
-    class Example<T, int> {};
-
-    int main() {
-        Example<double, double> e1;
-        e1.show();  // Generic template
-
-        Example<double, int> e2;
-        e2.show();  // Partial specialization with second type as int
-    }
-    ```
-
-## Lookup Order
-
-The order of function lookup (based on a given set of arguments):
-
-1. Regular Function (overloading here)
-2. Template Specialization
-3. Generic Template Function
+Check out Lecture 23, 24 of Meshcherin Notes.
 
 # Lecture 4.2 - Functors & Lambdas & Iterators
 
@@ -565,7 +479,9 @@ Regular functions are *not functors*, but they are callable objects just like fu
 
 ## Lambda function
 
-A **lambda function** (or lambda expression) in C++ is an anonymous function that can be defined in place without name.
+**Lambda function** - unnamed function object (i.e., a closure).
+
+After compilation lambda function becomes unnamed functor.
 
 Syntax: `[ capture ] ( parameters ) -> return_type { body }`.
 
@@ -573,11 +489,11 @@ Syntax: `[ capture ] ( parameters ) -> return_type { body }`.
 
 Capturing Variables:
 
-- [ ]: No capture (only parameters can be used).
-- [=]: Capture all variables by value.
-- [&]: Capture all variables by reference.
-- [x]: Capture x by value.
-- [&x]: Capture x by reference.
+- `[ ]`: No capture (only parameters can be used).
+- `[=]`: Capture all variables by value.
+- `[&]`: Capture all variables by reference.
+- `[x]`: Capture x by value.
+- `[&x]`: Capture x by reference.
 
 ```cpp
 auto lambda = [](int x, int y) {
@@ -626,32 +542,34 @@ std::next(begin)
 ++begin;    // the same
 ```
 
-1. Input
+1. **Input**
 
-   - Allows reading elements from a container once in a _single pass_.
-   - Supports `*it++` and `it++`.
-   - Use case: reading from input streams or traversing a container once.
+   - _Read-only_ & _single pass_
+   - Supports `operator*` and `operator++`
 
-2. Forward = Input + allows multiple passes
+   - _Use case_: reading from input streams.
 
-3. Bidirectional = Forward + backward (--it)
+2. **Forward** = Input + allows multiple passes
 
-   - support only ==, != comparison
-   - std::list & std::set
+   - `std::unordered_map` & `std::unordered_set`
 
-4. Random Access = Bidirectional + const time for `it + n` or `it[n]`
+3. **Bidirectional** = Forward + backward (`operator--`)
 
-   - support <, >, <=, >= comparison
-   - Found in std::vector & std::deque.
+   - support `==`, `!=` comparison
+   - `std::map` & `std::set` & `std::list`
 
-5. Contiguous = random + elements are stored sequentially in memory
+4. **Random Access** = Bidirectional + const time for `it + n` or `it[n]`
 
-   - This ensures better cache performance
-   - std::vector and std::array.
+   - support `<`, `>`, `<=`, `>=` comparison
+   - `std::deque`.
 
-6. Output
-   - `*it++ = value` and `it++` are used to insert or modify elements.
-   - Use case: writing to output streams or containers.
+5. **Contiguous** = Random + elements are stored sequentially in memory - **Acts like a raw pointer**
+
+   - `std::vector`, `std::array`, raw pointer
+
+6. **Output**
+   - _Write-only_ & _single pass_
+   - Use case: writing to output streams.
 
 ## `ranges`
 
@@ -854,10 +772,10 @@ public:
     }
 
     // Move Constructor
-    String(String&& other) noexcept : size(other.size), data_(other.data_) {  // no const, since it's already rvalue
+    String(String&& other) noexcept : size(other.size), data_(other.data_) {  // no `const`, since it's already rvalue
         // so when other is deleted attribes of 'this' (which now share memory) won't get affected
         other.data_ = nullptr;
-        // done to Prevent Double Deletion: After moving data_ from other to this, both this and other would point to the same memory. When other is destroyed, its destructor would attempt to delete[] data_
+        // done to prevent **Double Deletion**: After moving data_ from other to this, both this and other would point to the same memory. When other is destroyed, its destructor would attempt to delete[] data_
     }
 
     // Move Assignment Operator
@@ -1044,19 +962,18 @@ void destroy_T(T* p) {
 
 ## Placement `new`
 
-Specifies _pre-allocated_ memory address for an object at a specific memory address.
+**Placement** `new` - construct object on _pre-allocated_ memory buffer.
 
 ```cpp
 alignas(T) char buffer[sizeof(T)];
 
-T* obj = new (buffer) T(42);    // constructs T at buffer's address
+T* obj = new(buffer) T(42);             // constructs T at buffer's address
 
-obj->~T();                      // destructor
+obj->~T();                              // you **must** destruct manually
+// delete obj;                          // no allocation memory -> do NOT `delete`
 ```
 
-Use `alignas` for ensuring proper memory alignment with object's type.
-
-**Placement** `new` does not allocate memory, so do _not_ use `delete` to free it.
+> Use `alignas` for ensuring proper memory alignment with object's type.
 
 ## Causes of memory leaks
 
@@ -1149,32 +1066,32 @@ struct allocator {
 
 ## RAII
 
-**Resource Acquisition Is Initialization (RAII)** is a key C++ idiom where resource management is tied to the lifecycle of an object.
+**Resource Acquisition Is Initialization (RAII)** - C++ idiom where resource management is tied to the lifecycle of an object.
 
-Example of RAII without using smart pointers:
+Many say that using exceptions should be forbidden due to situations like:
 
 ```cpp
-class FileWrapper {
-    FILE* file;
-public:
-    FileWrapper(const char* filename, const char* mode) {
-        file = fopen(filename, mode);
-        if (!file) {
-            throw std::runtime_error("Failed to open file");
-        }
+void f() {
+    int* p = new int(0);
+    throw;
+    delete p;       // doesn't get to it.
+}
+
+struct S {
+    int* p;
+
+    S(int x) : p(new int(x)) {
+        throw;
+        // `S` isn't initialized fully, so destructor won't be used
     }
 
-    ~FileWrapper() {
-        if (file) {
-            fclose(file);  // Resource is released when object is destroyed
-        }
+    ~S() {
+        delete p;   // doesn't get to it.
     }
-
-    FILE* get() const { return file; }
 };
 ```
 
-Smart pointers automatically handle the deallocation of memory when the pointer goes out of scope.
+> Use **smart pointers** for ensuring **RAII**, because in their destructors they `delete` raw pointers.
 
 ## std smart pointers
 
@@ -1400,19 +1317,27 @@ class Button : public Clickable, public Rectangle { ... };
 class ExecutionContext final : private ITrampoline { ... }
 ```
 
-## Polymorphism
-
-### Static Polymorphism
+## Polymorphism (Static)
 
 - Defining multiple functions with the same name but different parameters
 - **Operator Overloading**
 
-### Dynamic Polymorphism
+## Polymorphism (Dynamic)
 
-- **virtual** & **override**: Functions that are declared in a base class and overridden in derived classes:
+### `virtual`
+
+`final` $\to$ `override` $\to$ `virtual`.
+
+- `final` = `final` + `override` + `virtual`
+- `override` = `override` + `virtual`
+
+`override` & `final` are needed _solely_ for the purpose of CE.  
+In derived, method with the same **signature** will be overrided as is without `override`.
 
 `= 0` makes a virtual function **pure virtual** — any subclass must implement this function.  
 With `= 0` virtual class can't be initialized.
+
+### Polymorthic & ABC
 
 - **Abstract Base Class** - class that has pure virtual method.
 
@@ -1425,6 +1350,7 @@ public:
     virtual void makeSound() const {
         std::cout << "Some generic animal sound" << '\n';
     }
+
     virtual void Action() = 0;  // derived classes HAVE to implement this; `IAnimal` can't be initialized
 };
 

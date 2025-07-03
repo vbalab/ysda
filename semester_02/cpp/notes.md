@@ -256,7 +256,7 @@ In general, C++'s type system is primarily statically typed.
 
 **Static Typing**: The majority of type checks, such as ensuring that variables are of the expected type, occur during compilation.
 
-**Dynamic Typing (Runtime)**: In cases involving polymorphism (like using virtual functions), C++ can perform type checks at runtime. This is typically done using dynamic_cast, which is used to safely downcast from a base class pointer or reference to a derived class pointer or reference.
+**Dynamic Typing (Runtime)**: In cases involving polymorphism (like using `virtual` functions), C++ can perform type checks at runtime. This is typically done using `dynamic_cast`, which is used to safely **downcast** from a base class pointer or reference to a derived class pointer or reference.
 
 ## Macroses (preprocessor stage)
 
@@ -329,30 +329,6 @@ constexpr int Factorial<0>() {
 }
 
 Factorial<5>();
-```
-
-### Overload resolution
-
-**Overload resolution**: full specialization $\rightarrow$ partial specialization $\rightarrow$ general template.  
-Within classes there is no order.
-
-```cpp
-// 1st attempt: fail
-// Full specialization (most specific match)
-template <>
-void foo<int>(int value) { ... }
-
-// 2nd attempt: fail
-// Partial specialization (less specific match)
-template <typename T>
-void foo(T* value) { ... }
-
-// 3rd attempt: success
-// General template (most general match)
-template <typename T>
-void foo(T value) { ... }
-
-foo("a");
 ```
 
 ### SFINAE
@@ -684,16 +660,9 @@ std::is_convertible<int, double>::value;
 using U = std::conditional_t<std::is_integral<T>::value, int, double>;  // T is `int` -> U is `int`, otherwise `double`
 ```
 
-# Lecture 2 - Variadic `template`s (Metaprogramming)
+# Lecture 2 - Variadic Templates (Metaprogramming)
 
-```cpp
-template <typename... Args>                 // **variadic template parameter**
-void print(Args... args) {                  // **parameter pack**   (C++11 feature)
-    (std::cout << ... << args) << '\n';     // **fold expression**  (C++17 feature)
-}
-```
-
-The types of args are deduced automatically.
+Variadic templates are C++11 feature.
 
 ## Expanding Parameter Pack
 
@@ -707,23 +676,29 @@ void foo(Args&&... args) {
 
 ## Recursive Unpacking
 
-Recursion is often used to process each element in the pack:
-
 ```cpp
-// base case overload
-template <typename T>
-void print(T& t) {
-    std::cout << t << '\n';
+template <typename Head, typename... Tail>
+void print(const Head& head, const Tail&... tail) {
+    std::cout << head << " ";
+    print(tail...);
 }
 
-template <typename T, typename... Args>
-void print(T& t, Args&... args) {
-    std::cout << t << " ";
-    print(args...);
-}
+// base case overload
+void print() {}
 ```
 
+> Keep in mind that each time new template instantiation consumes memory in the form of generated machine code $\to$ use **fold expressions**.
+
 ## Fold Expressions
+
+- C++17 feature
+
+```cpp
+template <typename... Args>
+void print(const Args&... args) {
+    (std::cout << ... << (args << " ")) << "\n";
+}
+```
 
 ```cpp
 (pack op ...) -> (p0 op (p1 op (p2 op p3)));
@@ -731,8 +706,6 @@ void print(T& t, Args&... args) {
 (pack op ... op init) -> (p0 op (p1 op (p2 op (p3 op init))))
 (init op ... op pack) -> ((((init op p0) op p1) op p2) op p3);
 ```
-
-Everything that can be done via fold expression, can be done using recursion.
 
 ## `initializer_list`
 
@@ -1884,4 +1857,59 @@ Functor is object that has `fmap` function that satisfies:
 
 ## Monad
 
-// 0:40:00
+Monad - functor
+
+TODO: continue
+
+# Lecture 13 - Linkers & Loaders
+
+## Object Files & Libraries
+
+**Object file** (`.o` or `.obj`) - intermediate compiled unit.
+
+What makes it static or dynamic depends on how you _link_ it.
+
+### Static Libraries
+
+**Static libraries** (`.a` or `.lib`) - archive of `.o` files.
+
+- At compile time: Linker _copies_ machine code from library into final binary.
+
+```bash
+g++ -c foo.cpp -o foo.o
+
+ar rcs libfoo.a foo.o
+```
+
+### Dynamic (Shared) Libraries
+
+**Shared objects (dynamic link libraries)** (`.so`, `.dll`, or `.dylib`) - `.o` files compiled with `-fPIC` and linked with `-shared`.
+
+$\to$ it becomes part of a **shared object**, and the executable references it dynamically.
+
+- At compile time: Linker leaves the code for declarations _unresolved_.
+
+- At runtime, the OS loader:
+
+    1. Loads `.so` into memory (if not already loaded)
+
+    2. Resolves declaration by looking it up in `.so`
+
+    3. Patches the executable’s reference table (PLT/GOT) to point to declaration in memory
+
+```bash
+g++ -fPIC -c foo.cpp -o foo.o
+
+g++ -shared foo.o -o libfoo.so
+```
+
+### Standard Library
+
+We know that at the preprocessing stage each header gets included in the file like text.  
+We also know that C++ compiling is pretty slow.  
+**TQ**: why headers from standard library don't take compilation time?
+
+The _definitions_ of standard library are _precompiled_ and stored in **shared objects**, rather than being compiled each time to raw **object files**.
+
+At the preprocessing stage `<iostream>` will expand into the file only _declarations_ to which _definitions_ are already precompiled. So, the only linker will take time for compiling `<iostream>`.  
+That's why it is `<iostream>` and not `"iostream"` to tell the compiler that these includes are from standard library.

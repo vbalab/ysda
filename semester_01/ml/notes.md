@@ -1,4 +1,4 @@
-<!-- markdownlint-disable MD025, MD001, MD024 -->
+<!-- markdownlint-disable MD001, MD024, MD025 -->
 
 # Lecture 1 - Intro
 
@@ -678,4 +678,3 @@ LSTM:
 2. Solves the problem of **vanishing gradient**, because **cell state** has no $\tanh$ or similar.
 
 # Lecture 14 - Markov Property, RNN
-
