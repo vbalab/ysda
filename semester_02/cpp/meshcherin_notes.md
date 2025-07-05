@@ -1398,6 +1398,8 @@ private:
 };
 ```
 
+> # PART 8: Iterators & Standard Library
+
 # Lecture 28 - Exception safety, `std::vector`
 
 ## Exception Specification: `noexcept`
@@ -1425,7 +1427,17 @@ _Destructors_ are `noexcept` by default from C++11, to disable this, use `noexce
 
 **Strong exception guarantee** — If the function throws an exception, the state of the program is rolled back to the state just before the function call (for example, `std::vector::push_back`).
 
-## `reserve` of `std::vector`
+## Any std::_container_
+
+When talking about any container, we should think about:
+
+1. How Iterator will work
+2. Invalidatiton of pointers/references/iterators
+3. Exception safety
+
+## `std::vector`
+
+### `reserve`
 
 > **"How to implement `push_back` of vector"** - single greatest questions to know someone's level of C++ knowleadge.
 
@@ -1473,6 +1485,16 @@ private:
     size_t size_;
 };
 ```
+
+### `reserve` vs `resize`
+
+`reserve` - only grows capacity
+
+`resize` - changes size, does construct/destroy elements
+
+### `max_size`
+
+Theoretical maximum number of elements the container could hold, Determined by the container’s `size_type` (often `std::size_t`) and the allocator’s limitations—typically something like `SIZE_MAX / sizeof(T)`.
 
 # Lecture 29 - `std::deque`, Iterators
 
@@ -1605,3 +1627,155 @@ std::cout.sync_with_stdio(false);   // untie from C
 ```
 
 # Lecture 32 - `std::list`, `std::map`
+
+## `std::list`
+
+```cpp
+template <typename T>
+class List {
+    struct BaseNode {
+        BaseNode* prev;
+        BaseNode* next;
+    };
+    struct Node : public BaseNode {
+        T value;
+    };
+
+public:
+    List() :
+    fake_node_(&fake_node_, &fake_node_),   // !
+    size_(0) {
+    }
+
+private:
+    BaseNode* fake_node_;
+    size_t size_;
+};
+
+int main() {
+
+    return 0;
+}
+```
+
+## `std::map`
+
+Can't use `operator[]` under `const` $\to$ use `.at()`.  
+Because if no value found under `[key]`, it creates new `T()`.
+
+```cpp
+std::map<int, char> m;
+
+// inline void std::map<int, char>::insert(std::initializer_list<std::pair<const int, char>> __list)
+m.insert({{0, 'a'}, {1, 'b'}});
+
+// inline std::pair<std::map<int, char>::iterator, bool> std::map<int, char>::insert(std::pair<const int, char> &&__x)
+m.insert({2, 'c'}); // bool = false -> no insertion (the key was already present).
+
+// auto
+// decltype(m)::iterator
+// std::map<int, char>::iterator
+if (auto it = m.find(3); it != m.end()) {
+    it->second = 'd';
+}
+```
+
+`begin` - lowest (leftest) value of RB tree, `end` - fake node higher than the root of RB tree (- rightest value).
+
+### `std::set`
+
+Absolutely the same, except instead of `std::pair<Key, Value>` stores only `Key`, and there's no `operator[]`.
+
+# Lecture 33 - Stream Iterators
+
+## `std::istream_iterator` & `std::ostream_iterator`
+
+```cpp
+template <typename T>
+class IstreamIterator {
+public:
+    using iterator_category = std::input_iterator_tag;
+    using value_type = T;
+    using reference = const T&;
+    using pointer = const T*;
+    using difference_type = std::ptrdiff_t;
+
+public:
+    IstreamIterator() : in_(nullptr) {
+    }
+
+    explicit IstreamIterator(std::istream& in) : in_(&in) {
+        *in_ >> value_;
+    }
+
+    IstreamIterator& operator++() {
+        if (in_ && !(*in_ >> value_)) {
+            in_ = nullptr;
+        }
+
+        return *this;
+    }
+
+    reference operator*() const {
+        return value_;
+    }
+
+    pointer operator->() const {
+        return &value_;
+    }
+
+    bool operator==(const IstreamIterator& it) {
+        return in_ == it.in_;
+    }
+
+    bool operator!=(const IstreamIterator& it) {
+        return in_ != it.in_;
+    }
+
+private:
+    std::istream* in_;
+    value_type value_;
+};
+
+int main() {
+    IstreamIterator<int64_t> it(std::cin);
+
+    std::vector<int64_t> v(it, IstreamIterator<int64_t>());  // Ctrl + D
+
+    std::copy(v.begin(), v.end(), std::ostream_iterator<int64_t>(std::cout, ", "));
+}
+```
+
+# Lecture 34  - `std::unordered_map`
+
+## Implementation
+
+`std::unordered_map` tries to be versatile by having iterators with full bypass from `begin` to `end` in O(#elements), not O(capacity).
+
+1. GCC’s & clang:
+    Buckets are stored in `__node** _M_buckets` (like `std::vector<node*>`).
+
+    `_M_buckets[i]` actually points to the node immediately before the first element of bucket `i`, so that `_M_buckets[i]->next` is the bucket’s true head.  
+    This **“predecessor” trick** lets erasure run in constant time without a backward pointer.
+
+2. Microsoft’s STL:
+    1. `std::vector<list<value_type>::iterator>` where buckets are stored
+    2. one doubly-linked `std::list` where all elements live (nodes sorted by bucket index)
+
+## Iterator
+
+C++ standard guarantees at least a forward iterator.
+
+1. GCC/Clang: forward-only
+
+2. MSVC: **bidirectional**
+
+## Invalidation
+
+- Iterators: invalidated on `rehash` (or clear/erase of that element), but otherwise stable;
+
+- Pointers/References: invalidated only when the element itself is erased (or container is cleared), never by bucket reshuffling.
+
+> # PART 9: Allocators & Memory Management
+
+# Lecture 35 - Allocators
