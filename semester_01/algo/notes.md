@@ -79,7 +79,7 @@ def find_solutions(parameters):
 ## Binary Decomposition (as Efficient Resource Allocation)
 
 If we're given some money say number $N$ and we need to give some payment that consists of this money, we don't need to give money coin by coin, but rather we can split our money into butches of $2^k$ and some reminder of $N - 2^{k_max}$ that get's splitted too recursively.  
-This way, we can get to payment with $N \rightarrow \log(N)$, since with $2^k$ we can represent any number $<N$.
+This way, we can get to payment with $N \to \log(N)$, since with $2^k$ we can represent any number $<N$.
 
 # Seminar 2 - DIDN'T WATCHED
 
@@ -395,7 +395,7 @@ Recursively:
 
 2. Conquer: Recursively sort each half.
 
-3. Combine: Merge the two sorted halves (with sizes $n_1$ and $n_2$) back together into one sorted array. Here use **exponential BS** instead of linear way, because $O(n_1 log(\frac{n_1 + n_2}{n_1}))$ where $n_1 \le n_2$ is better than $O(n_1 + n_2)$ when $n_1$ is approximately $n_2$. And since our arrays are halves $ \rightarrow $ $n_1$ is $n_2$ with accuracy by 1.
+3. Combine: Merge the two sorted halves (with sizes $n_1$ and $n_2$) back together into one sorted array. Here use **exponential BS** instead of linear way, because $O(n_1 log(\frac{n_1 + n_2}{n_1}))$ where $n_1 \le n_2$ is better than $O(n_1 + n_2)$ when $n_1$ is approximately $n_2$. And since our arrays are halves $ \to $ $n_1$ is $n_2$ with accuracy by 1.
 
 ### Exponential BS
 
@@ -413,14 +413,14 @@ direct addressing
 
 Hash function:
 
-1. $ h: K \rightarrow \{0, ..., m-1\} $ (i.e. keys $ \rightarrow $ buckets)
-2. $ h: K \rightarrow \texttt{int}$ , $\texttt{int} \mod m \rightarrow \{0, ..., m-1\} $
+1. $ h: K \to \{0, ..., m-1\} $ (i.e. keys $ \to $ buckets)
+2. $ h: K \to \texttt{int}$ , $\texttt{int} \mod m \to \{0, ..., m-1\} $
 
 Hash functions in programming languages are very simple in order to be fast (unlike hash functions in crypto). In C++ hash of $\texttt{int}$ is the same $\texttt{int}$.
 
 ### Collisions
 
-If $|K| > m \rightarrow \exists k',k'' \in K $ s.t. $ h(k') == h(k'')$ - **collision**, could happen even if $|K| < m $.
+If $|K| > m \to \exists k',k'' \in K $ s.t. $ h(k') == h(k'')$ - **collision**, could happen even if $|K| < m $.
 
 $ \frac{n}{m} $ - load factor.
 
@@ -444,7 +444,7 @@ Then $ E_h(l) = \frac{n}{m} + 1$, which is constant if $ n = q m $.
 
 ## Perfect Hashing
 
-Is such $ h: K \rightarrow \{0, ..., m-1\} $ that $\forall a' \neq a'' \in A \subset K: h(a') \neq h(a'') $.
+Is such $ h: K \to \{0, ..., m-1\} $ that $\forall a' \neq a'' \in A \subset K: h(a') \neq h(a'') $.
 
 The idea is to find such $h$ for $A$ so there would be no collisions.
 
@@ -480,7 +480,7 @@ Structure:
 1. **Hash Functions**: Uses $ d $ independent hash functions $ h_1, h_2, \ldots, h_d $ mapping elements to a range of $ [0, w-1] $:
 
    $$
-   h_i(x) \rightarrow [0, w-1] \quad \text{for } i = 1, 2, \ldots, d
+   h_i(x) \to [0, w-1] \quad \text{for } i = 1, 2, \ldots, d
    $$
 
    where $ w $ is the width of each row, and $ d $ is the number of rows.
@@ -570,7 +570,7 @@ $$
 
 The **Misra-Gries** algorithm is an efficient algorithm used to find frequent items in a data stream. It approximates the frequency of items with a specified error bound and can be used in scenarios where the exact frequency is not required but an approximate count suffices.
 
-#### Notations and Definitions
+### Notations and Definitions
 
 - Let $ C $ be a data structure that keeps track of potential frequent items and their approximate counts.
 - Each entry $ C[x] $ corresponds to an item $ x $ with an associated counter.
@@ -579,14 +579,14 @@ The **Misra-Gries** algorithm is an efficient algorithm used to find frequent it
   - $ \varepsilon $: Error tolerance (relative approximation error).
   - $ m $: Number of counters (inversely proportional to $ \varepsilon $), approximately $ m \approx \frac{1}{\varepsilon} $.
 
-#### Algorithm
+### Algorithm
 
 1. For each incoming item $ x $:
    - If $ x $ is in $ C $, increment $ C[x] $ by 1.
    - If $ x $ is not in $ C $ and $ C $ has fewer than $ m $ items, add $ x $ to $ C $ with a counter of 1.
    - If $ x $ is not in $ C $ and $ C $ is full, decrement all counters in $ C $ by 1.
 
-#### Key Properties and Inequalities
+### Key Properties and Inequalities
 
 - $ \forall x: $ $ \text{count}(x) \geq \hat{\text{count}}(x) $
 - Approximation Bound:
@@ -752,37 +752,40 @@ $G(V, E)$, it's size is $|V| + |E|$.
 Adjacency matrix $O(V^2)$ by memory is bad for sparce case.  
 Using matricies as structure for graph is useless, since we're not interested in relation between any 2 arbitrary verticies.  
 
-std::vector\<Vericies\>(std::vector\<VerticiesFromEachVertex\>) is good  
-std::vector\<std::pair<v1, v2>\> is good
+- `std::vector<Vericies>(std::vector<Verticies>)` is good  
+
+- `std::vector<std::pair<v1, v2>>` is good
 
 ## BFS
 
 ```pseudo
-Q := {s}
-visited := ∅
+BFS(s):
+    Q := {s}
+    visited := ∅
 
-while Q ≠ ∅:
-    u := deque(Q)
-    for (u, v) ∈ E:
-        if ¬visited(v):
-            enqueue(Q, v)
-            visited.insert(v)
+    while Q ≠ ∅:
+        u := deque(Q)
+        for (u, v) ∈ E:
+            if ¬visited(v):
+                enqueue(Q, v)
+                visited.insert(v)
 ```
 
 time: $O(V+E) \sim O(E)$, because it's considered that $V < E$, otherwise graph is strange.
 
 ## DFS
 
-col: V $\rightarrow$ {W, G, B} (white, gray, black)
+col: V $\to$ {W, G, B} (white, gray, black)
 
 ```pseudo
-col(u) := G
+DFS(u):
+    col(u) := G
 
-for uv ∈ E:
-    if col(v) = W:
-        DFS(v)
+    for uv ∈ E:
+        if col(v) = W:
+            DFS(v)
 
-col(u) := B
+    col(u) := B
 ```
 
 time: $O(V+E) \sim O(E)$
@@ -1059,12 +1062,12 @@ The amortized time complexity for find and union operations is $O(1)$
 **Spanning Tree** is a subset of a connected $G(V, E)$ that includes all the vertices of the graph and is a tree.  
 It is $G(V, E)$ without unnesessary part of $E$.
 
-If we want to find Minimal Spanning Tree $\rightarrow$ use DFS.
+If we want to find Minimal Spanning Tree $\to$ use DFS.
 
 ### Kruscal algorithm
 
-We have connected $G(V, E)$ has weighted edges with $C: E \rightarrow R_+$.  
-We interested in finding Minimal Spanning Tree s.t. $\sum c(e) \rightarrow min$.
+We have connected $G(V, E)$ has weighted edges with $C: E \to R_+$.  
+We interested in finding Minimal Spanning Tree s.t. $\sum c(e) \to min$.
 
 ```py
 class Graph:
@@ -1111,9 +1114,9 @@ class Graph:
 
 # Lecture 11 - Weighted Graphs: Shortest paths
 
-**Length** $l: E \rightarrow \real$ - weight of an edge.
+**Length** $l: E \to \real$ - weight of an edge.
 
-Length of path $P: l(P)=\sum_{e \in P} l(e) \rightarrow min$
+Length of path $P: l(P)=\sum_{e \in P} l(e) \to min$
 
 Tasks:
 
@@ -1286,7 +1289,7 @@ def bidirectional_dijkstra_with_states(graph, reverse_graph, source, target):
 Reweighting edges can be applied to Dijkstra to handle graphs with **negative weights** but no negative cycles.
 
 By applying **Johnson's reweighting technique**:  
-$G$ with possibly negative weights $ w(u, v) $ $\rightarrow$ $G'$ with non-negative weights $ w'(u, v) $:
+$G$ with possibly negative weights $ w(u, v) $ $\to$ $G'$ with non-negative weights $ w'(u, v) $:
 
 $$ w'(u, v) = w(u, v) + \pi(u) - \pi(v) $$
 

@@ -2,14 +2,14 @@
 
 # Set up
 
-- <https://gitlab.manytask.org/cpp0/public-2024-fall/-/tree/main/multiplication>  
-- <https://gitlab.manytask.org/cpp0/public-2024-fall/-/blob/main/docs/setup.md>  
+- <https://gitlab.manytask.org/cpp0/public-2024-fall/-/tree/main/multiplication>
+- <https://gitlab.manytask.org/cpp0/public-2024-fall/-/blob/main/docs/setup.md>
 - <https://docs.google.com/document/d/1K0t05Bmqb3he3gW4ORQXfkVfFouS4FRT/edit>
 
 2025:
 
 - [Setup](https://gitlab.manytask.org/cpp/public-2025-spring/-/blob/main/docs/SETUP.md)
-<https://gitlab.manytask.org/cpp/public-2025-spring/-/tree/main/range-sum>
+  <https://gitlab.manytask.org/cpp/public-2025-spring/-/tree/main/range-sum>
 
 ## Docker
 
@@ -198,23 +198,15 @@ git push origin main
 
 ---
 
-When adding elements to a std::vector that exceeds its current capacity, the vector **reallocates** memory to accommodate more elements. This reallocation **invalidates any pointers**, references, or iterators to the elements, as the underlying memory location changes. Consequently, dereferencing those pointers after reallocation leads to undefined behavior.
+`size_t` is a platform-dependent (32 or 64), unsigned type used for representing sizes and counts.
 
 ---
 
-`std::size_t` is a platform-dependent (32 or 64), unsigned type used for representing sizes and counts.
+For small primitives using direct copying like `size_t` is better than `const size_t&` which goes with:
 
----
-
-Choose `std::array` over `std::vector` for:
-
-- Compile-time fixed size.
-- Better speed and lower overhead for small arrays.
-- Contiguous memory layout.
-
----
-
-For small primitives using direct copying like `std::size_t` is better than `const std::size_t&` (which goes with Additional Indirection, Potential Cache Misses, Aliasing).
+- Additional Indirection
+- Potential Cache Misses
+- Aliasing
 
 ---
 
@@ -222,8 +214,7 @@ For small primitives using direct copying like `std::size_t` is better than `con
 
 ---
 
-In `std::cout` use explicit **flushing** through `std::flush` or `std::endl` when you want to ensure the output is immediately displayed, such as in debugging or interactive applications.  
-Otherwise use `'\n'`;
+In `std::cout` use explicit **flushing** through `std::flush` or `std::endl` when you want to ensure the output is immediately displayed, such as in debugging or interactive applications.
 
 `std::cerr` is **unbuffered**, it doesn’t need explicit flushing.
 
@@ -235,7 +226,7 @@ Otherwise use `'\n'`;
 
 ---
 
-`int` overflow - UB: could result in anything from crashing the program to returning a wrapped-around value, depending on C++ version and computer architecture.
+`int` overflow - **UB**: could result in anything from crashing the program to returning a wrapped-around value, depending on C++ version and computer architecture.
 
 `uint` overflow - well-defined and causes the value to wrap around.
 
@@ -249,122 +240,124 @@ Nothing interesting.
 
 # Lecture 2 - RVO
 
-```cpp
-int a[4];
-std::size(a) = size_of(a) / size_of(*a);
-```
-
-To create array of references use **std::reference_wrapper**
-
-## Return Value Optimization (RVO)
+## Return Value Optimization (C++17)
 
 **RVO**: Optimizes away the copy for temporary objects returned by value.
 
 Say you have
 
 ```cpp
-struct LargeObject {
-    LargeObject() { std::cout << "LargeObject Constructor\n"; }
-    LargeObject(const LargeObject&) { std::cout << "LargeObject Copy Constructor\n"; }
-    ~LargeObject() { std::cout << "LargeObject Destructor\n"; }
+struct A {
+    A() {
+        std::cout << "Constructor\n";
+    }
+    A(const A&) {
+        std::cout << "Copy Constructor\n";
+    }
+    ~A() {
+        std::cout << "Destructor\n";
+    }
 };
 
-LargeObject CreateLargeObject() {
-    return LargeObject();  // RVO will optimize this return in C++17
+A CreateA() {
+    return A();
 }
 
 int main() {
-    LargeObject obj = CreateLargeObject();  // No copy or move constructor will be called due to RVO
+    A obj = CreateA();  // No copy or move constructor will be called due to RVO
 }
 ```
 
 Output without RVO (if RVO were not applied):
 
 ```txt
-LargeObject Constructor
-LargeObject Copy Constructor
-LargeObject Destructor          // of original
-LargeObject Destructor          // of copied
+Constructor
+Copy Constructor
+Destructor          // of original
+Destructor          // of copy
 ```
 
 With RVO:
 
 ```txt
-LargeObject Constructor
-LargeObject Destructor
+Constructor
+Destructor
 ```
 
-## Named RVO
+### Named RVO
 
-C++17 guarantees RVO, but NRVO is still optional (compiler-dependent)
-
-**NRVO**: Optimizes away the copy for named objects returned by value (not guaranteed but commonly done by compilers).
+RVO did for:
 
 ```cpp
-LargeObject CreateLargeObjectNRVO() {
-    LargeObject obj;  // a named object
-    // Do some operations on obj
-    return obj;  // NRVO might kick in here to avoid the copy
+template <typename T>
+T f() {
+    return T(); // **unnamed** temporary object
 }
 ```
 
-## Namespace
+**NRVO** allows for:
 
 ```cpp
-namespace MyCode {
-    struct Point {};
+template <typename T>
+T f() {
+    T x();
+    return x;   // **named** object
 }
-
-MyCode::Point p;
 ```
 
-## .h & .cpp
+## .hpp & .cpp
 
-For modularity, easier maintenance, and faster builds:
+- declaration $\rightarrow$ `.hpp` (headers):  
+  Includes necessary `#include` directives and header guards (`#pragma once` or `#ifndef` ... `#define`) and does only declaration.
 
-- declaration $\rightarrow$ `.h` (headers)  
-  Includes necessary #include directives and header guards (`#pragma once` or `#ifndef` ... `#define`) and does only declaration.
-
-- definitions $\rightarrow$ `.cpp`  
+- definitions $\rightarrow$ `.cpp`:  
   Includes the corresponding header file and does all implementation of declared in `.h`.
 
 **Linker** is a tool that combines one or more object files generated by a compiler into a single executable or library.
 
-If .h gets changed $\rightarrow$ everything in project gets recompiled.  
-If .cpp gets changed $\rightarrow$ recompiled only 1 file & linker does the job.
+If `.hpp` gets changed $\rightarrow$ everything in project gets recompiled.  
+If `.cpp` gets changed $\rightarrow$ recompiled only 1 file & linker does the job.
 
 # Lecture 3 - Structs & Classes
 
-## `struct` members
+## don't do function creation
 
-`struct`s are fully determined at compile time.  
-So, struct member offsets are known at compile time, without storing any meta-data (in form of overhead) at runtime.`
+**TQ**:
 
-The actual memory location of a field is just: base + offset.
+```cpp
+T x(1);    // T(int)
+T x{1};    // T(int)
 
-Regular (non-`virtual`) `class`es behave just like `struct`s in terms of memory layout.
+T x;    // T()
+T x();  // function! - be aware
+T x{};  // T()
+```
+
+> $\to$ Always create using `{}`;
+
+## `class` vs `struct`
+
+| **Property**                       | **struct**                   | **class**                                   |
+| ---------------------------------- | ---------------------------- | ------------------------------------------- |
+| Default member & base-class access | public                       | private                                     |
+| Default inheritance access         | public                       | private                                     |
+| Typical convention                 | Plain-data aggregates or POD | Encapsulated types with invariants/behavior |
 
 ## `const` & `mutable`
 
 ```cpp
 struct MyStruct {
     int value;
-    mutable std::size_t count;  // to bypass `const` of method
+    mutable size_t count;  // to bypass `const` of method
 
-    // Const method: Cannot modify member variables
-    int getValueConst() const {
+    int getValueConst() const { // `const`: Cannot modify member variables
         count++;                // ok
-        value++;                // compilation error
+        value++;                // CE
         return value;
     }
 
     int getValue() const {
         return value;
-    }
-
-    bool Checker(const MyStruct& s) {
-        s.getValueConst();      // compilation error
-        s.getValue();           // ok
     }
 };
 ```
@@ -372,82 +365,51 @@ struct MyStruct {
 ## Memory Initializer List
 
 ```cpp
-struct MyStruct {
-    int value1;
-    int value2;
-    const int value3;
-    const int value4;
+struct S {
+    int v1_;
+    const int v2_;
 
-    MyStruct(int _value1, int _value2, int _value3,  int _value4)
+    S(int val1, int val2)
         // Memory Initializer List:
-        : value1(_value1)
-        , value3(_value3)
-        , value4(_value4) {     // const can be initialized only here
-        value2 = _value2;       // at this stage MyStruct is already initialized and only changes attributes
-        value3 = _value3 + value4;
+        // `const` can be initialized only here
+        : v1_(val1)
+        , v2_(val2) {
+        // at this stage `S` is already initialized and only changes attributes
+        v1_ = v1 + v2;
     }
 }
 ```
-
-**explicit** constructor;
 
 ## `static`
 
 ```cpp
-struct MyStruct {
-    static std::size_t init_count;  // attribute of struct, not particular object
-    inline static int smth = 0;     // inline initialization
+struct S {
+    constexpr static size_t kZero = 0; // "a member with an **in-class initializer** must be `const`"
+    static size_t init_count;       // attribute of class `S`, not instance of `S`
 
-    MyStruct() {
+    S() {
         ++init_count;
     }
-
-    static int smth();              // again.
 }
 
-std::size_t MyStruct::init_count = 0;
-MyStruct s1;                    // init_count = 1
-MyStruct s2;                    // init_count = 2
-
-Mystruct::smth();
-```
-
-## `friend`
-
-By default: in class all `private`, in struct all `public`.
-
-Use **friend** for `public` methods that want to get `private`/`protected` members.  
-Also, it allows to use them to another object of the same type.
-
-```cpp
-class MyClass {
-private:
-    int value;
-
-public:
-    MyClass(int v) : value(v) {}
-
-    friend MyClass operator+(const MyClass& lhs, const MyClass& rhs);
-};
-
-MyClass operator+(const MyClass& lhs, const MyClass& rhs) {
-    // Can access private members of both lhs and rhs
-    return MyClass(lhs.value + rhs.value);
-}
+size_t S::init_count = 0;
+S s1{};                    // init_count = 1
+S s2{};                    // init_count = 2
 ```
 
 ## `delete`
 
-The **delete** keyword can be used to explicitly disable certain functions, preventing specific actions such as copying, moving, or assignment.
+The **delete** keyword can be used to explicitly disable certain functionsv (like copying, moving, or assignment).
 
 ```cpp
-class MyClass {
-public:
-    MyClass() = default;
-    MyClass(const MyClass&) = delete;       // Disable copy constructor
-    MyClass(MyClass&&) = delete;            // Disable move constructor
-    MyClass& operator=(const MyClass&) = delete;  // Disable copy assignment
-    MyClass& operator=(MyClass&&) = delete;       // Disable move assignment
+class S {
+    S() = default;
+
+    S(const S&) = delete;               // Disable copy constructor
+    S(S&&) = delete;                    // Disable move constructor
+
+    S& operator=(const S&) = delete;    // Disable copy assignment
+    S& operator=(S&&) = delete;         // Disable move assignment
 };
 ```
 
@@ -455,13 +417,11 @@ public:
 
 Check out Lecture 23, 24 of Meshcherin Notes.
 
-# Lecture 4.2 - Functors & Lambdas & Iterators
+# Lecture 4.2 - Functors & Lambdas
 
 ## Functors
 
-A **functor** in C++ is an instance of a class or struct that has the function call `operator()`.
-
-Any class/struct that has the operator() implemented is considered a functor.
+**Functor** in C++ - instance of a `class`/`struct` that has `operator()` overloaded.
 
 ```cpp
 struct Functor {
@@ -475,19 +435,19 @@ struct Functor {
 };
 ```
 
-Regular functions are *not functors*, but they are callable objects just like functors.
+Functions are _not functors_.
 
-## Lambda function
+## Lambda
 
-**Lambda function** - unnamed function object (i.e., a closure).
+**Lambda** - _unnamed_ function object (i.e., a closure).
 
-After compilation lambda function becomes unnamed functor.
+After compilation lambda function becomes **unnamed functor**.
 
-Syntax: `[ capture ] ( parameters ) -> return_type { body }`.
+Syntax: `[ capture ] ( parameters ) -> ReturnType { body }`.
 
-**capture** - specifies which variables from the surrounding scope are captured.
+### Capture
 
-Capturing Variables:
+**Capture** - variables from the surrounding scope to capture as _members_ of compiled unnamed functor.
 
 - `[ ]`: No capture (only parameters can be used).
 - `[=]`: Capture all variables by value.
@@ -495,45 +455,40 @@ Capturing Variables:
 - `[x]`: Capture x by value.
 - `[&x]`: Capture x by reference.
 
-```cpp
-auto lambda = [](int x, int y) {
-    return x + y;
-};
+### `mutable`
 
-auto add = [a, &b](int x) {
-    b += a;
-    b += x;
-    return b;
-};
-```
+By default, a lambda’s `operator()()` is `const`.
 
 ```cpp
-inc i = 0;
+int i = 0;
 
-auto count = [cnt = i]() {
-    ++cnt;      // error
+auto count = [i]() { 
+    ++i;    // CE
 };
 
-auto count = [cnt = i]() mutable {
-    ++cnt;
+auto count = [i]() mutable {
+    ++i;
+};
+
+auto count = [&i]() {
+    ++i;    // ok, because member is `int& i`
 };
 ```
 
 ### why `auto`?
 
-C++ doesn't have a lambda type because lambdas are implemented as **anonymous (unnamed) closure classes**, so their types are often complex and compiler-generated, making them difficult to explicitly specify.
+C++ doesn't have a lambda type because lambdas are implemented as **anonymous (unnamed) functors (class)**, so their types are often complex and compiler-generated, making them difficult to explicitly specify.
 
 ## Higher-Order Functions
 
-In C++, higher-order functions are typically implemented using function pointers, std::function, lambdas, or functors.
+**Higher-order functions** are typically implemented using:
 
-```cpp
-void applyFunction(int x, int(*func)(int)) {
-    std::cout << "Result: " << func(x) << '\n';
-}
-```
+- function pointer (see Meshcherin Notes, Lecture 8)
+- `std::function`
+- lambda
+- functor
 
----
+# Lecture 4.3 - Iterators
 
 ## Iterators
 
@@ -573,27 +528,28 @@ std::next(begin)
 
 ## `ranges`
 
-**Ranges** in C++ (introduced in C++20) provide a more modern, flexible way to work with sequences of data, offering a powerful alternative to the traditional iterator-based approach.
+**Ranges** (C++20) provide a more modern, flexible way to work with sequences of data, offering a powerful alternative to the traditional iterator-based approach.
 
 The main difference between ranges & iterators is that types of range for the start and end may be different.
 
 C++20 provides range-based versions of algorithms (like `std::ranges::sort`, `std::ranges::find`), which operate directly on ranges.
 
-## `views`
+### `views`
 
-The **ranges::views** provide a powerful way to create **lazy**, **non-owning** adaptors over ranges.
+`ranges::views` - powerful way to create **lazy** **non-owning** adaptors over ranges.
 
 ```cpp
-std::vector<int> v = {0, 1, 2, 3}
-for (int x : std::views::filter(v, [](int x) { return x % 2 == 0; })) {
-    std::cout << x << " ";  // Outputs: 0 2
+std::vector<int> vec;
+
+for (int x : std::views::filter(vec, [](int x) { return x % 2 == 0; })) {
+    std::cout << x << " ";
 }
 ```
 
-view **chaining**:
+### Chaining
 
 ```cpp
-std::vector<int> vec = {1, 2, 3, 4, 5, 6, 7, 8, 9, 10};
+std::vector<int> vec;
 
 for (auto x: vec | std::views::filter([](int x) { return x % 2 == 0; })
                  | std::views::transform([](int x) { return x * x; })
@@ -606,14 +562,14 @@ for (auto x: vec | std::views::filter([](int x) { return x % 2 == 0; })
 
 ## lvalue & rvalue
 
-Object **has identity** if:
+Object **has identity** if both:
 
-1. it occupies a distinct region of storage in memory _and_
-2. persists beyond a single expression.
+1. It occupies a distinct region of storage in memory
+2. Persists beyond a single expression
 
-Object **can be moved** if:
+Object **can be moved** if both:
 
-1. It has a move constructor or move assignment operator defined (either explicitly or implicitly) _and_
+1. It has a move constructor or move assignment operator defined (either explicitly or implicitly)
 
 2. The object is used in a context that allows moving — i.e., it’s an rvalue or xvalue (e.g., `std::move(x)`).
 
@@ -623,37 +579,37 @@ Object **can be moved** if:
 
 1. **glvalue** = lvalue || xvalue:
 
-    - **lvalue** — named object in memory (has identity, persistent storage)
+   - **lvalue** — named object in memory (has identity, persistent storage)
 
-    ```cpp
-    int x = 5;
-    int& ref = x;
-    x;          // lvalue
-    ref;        // lvalue
-    ```
+   ```cpp
+   int x = 5;
+   int& ref = x;
+   x;          // lvalue
+   ref;        // lvalue
+   ```
 
-    - xvalue
+   - xvalue
 
 2. **rvalue** = prvalue || xvalue:
 
-    - **prvalue** — pure temporary value, no identity
+   - **prvalue** — pure temporary value, no identity
 
-    ```cpp
-    42;                 // prvalue
-    std::string("hi");  // prvalue
-    x + y;              // prvalue if x, y are ints
-    ```
+   ```cpp
+   42;                 // prvalue
+   std::string("hi");  // prvalue
+   x + y;              // prvalue if x, y are ints
+   ```
 
-    - xvalue
+   - xvalue
 
 3. **xvalue** = glvalue (has identity) && rvalue (can be moved) — movable, _expiring object_:
 
-    ```cpp
-    std::move(x);  // xvalue
-    a[0];          // xvalue if a is std::vector<T>
-    ```
+   ```cpp
+   std::move(x);  // xvalue
+   a[0];          // xvalue if a is std::vector<T>
+   ```
 
-#### `++`
+### `++`
 
 - `++a` $\leftarrow$ lvalue;
 
@@ -937,7 +893,7 @@ new (C++) $\rightarrow$ malloc (C) $\rightarrow$ mmap (asm)
 
 ## Array overhead
 
-**Array overhead** is `std::size_t` stored (in memory) before array as metadata for size of array.  
+**Array overhead** is `size_t` stored (in memory) before array as metadata for size of array.  
 That's how `delete []` knows how much to deallocate.  
 !!!NO!!! it's not like that: see "akos10.2 Pointer Meta Info"
 
@@ -951,7 +907,7 @@ struct T {
     ~T() {};    // !!
 };
 
-T* create_T(const std::size_t& n) {
+T* create_T(const size_t& n) {
     return new T[n];
 }
 
@@ -1055,8 +1011,8 @@ In performance-critical applications, custom allocators for **performance tuning
 ```cpp
 template <typename T>
 struct allocator {
-    T* allocate(std::size_t);
-    void deallocate(T*, std::size_t);
+    T* allocate(size_t);
+    void deallocate(T*, size_t);
     void constructor(T*, args);
     void destroy(T*);
 }
@@ -1137,9 +1093,9 @@ std::unique_ptr<int[], decltype(&customArrayDeleter)> arr(new int[5]{1, 2, 3, 4,
 Since `std::unique_ptr` is non-copyable, you can't pass it by value, but you can pass it by rvalue reference or by `std::move`ing it into the constructor.
 
 ```cpp
-class MyClass {
+class S {
 public:
-    MyClass(std::unique_ptr<int> p) : ptr(std::move(p)) {}
+    S(std::unique_ptr<int> p) : ptr(std::move(p)) {}
 private:
     std::unique_ptr<int> ptr;
 };
@@ -1178,21 +1134,21 @@ std::shared_ptr<int> arr(new int[5]{1, 2, 3, 4, 5}, customArrayDeleter);
 Problem:
 
 ```cpp
-class MyClass {
+class S {
 public:
-    std::shared_ptr<MyClass> getShared() {
-        return std::shared_ptr<MyClass>(this);  // Incorrect!
+    std::shared_ptr<S> getShared() {
+        return std::shared_ptr<S>(this);  // Incorrect!
     }
-    ~MyClass() {
-        std::cout << "MyClass destroyed\n";
+    ~S() {
+        std::cout << "S destroyed\n";
     }
 };
 
 int main() {
-    std::shared_ptr<MyClass> ptr1 = std::make_shared<MyClass>();
-    std::shared_ptr<MyClass> ptr2 = ptr1->getShared();  // Separate reference count!
+    std::shared_ptr<S> ptr1 = std::make_shared<S>();
+    std::shared_ptr<S> ptr2 = ptr1->getShared();  // Separate reference count!
 
-    // `ptr1` and `ptr2` will try to delete `MyClass` separately, leading to undefined behavior
+    // `ptr1` and `ptr2` will try to delete `S` separately, leading to undefined behavior
     return 0;
 }
 ```
@@ -1200,9 +1156,9 @@ int main() {
 The way:
 
 ```cpp
-class MyClass : public std::enable_shared_from_this<MyClass> {
+class S : public std::enable_shared_from_this<S> {
 public:
-    std::shared_ptr<MyClass> getShared() {
+    std::shared_ptr<S> getShared() {
         return shared_from_this();  // Uses the existing control block
     }
 };
@@ -1499,7 +1455,7 @@ struct alignas(1) MyStruct {
 
 Using `alignas(1)` (or `#pragma pack(1)`) to minimize memory usage comes with slower memory access: CPU has to perform extra work to read or write **misaligned** data.
 
-### `std::aligned_storage` and Placement New
+### `std::aligned_storage` & Placement `new`
 
 `std::aligned_storage` provides raw, untyped memory with a specified size and alignment.
 
@@ -1871,7 +1827,7 @@ Examples: Internet Protocol (IPv4, IPv6), ICMP (for ping).
 
 ### TCP
 
-**TCP** (Transmission Control Protocol) - *connection-oriented* protocol designed to provide *reliable* (data integrity) communication in *correct order* with between devices.
+**TCP** (Transmission Control Protocol) - _connection-oriented_ protocol designed to provide _reliable_ (data integrity) communication in _correct order_ with between devices.
 
 - Resends lost or corrupted packets (**error correction**).
 
@@ -1885,7 +1841,7 @@ Use cases:
 
 ### UDP
 
-**UDP** (User Datagram Protocol) - *connectionless* protocol designed for *low-latency* and time-sensitive (may be not reliable & ordered) communication.
+**UDP** (User Datagram Protocol) - _connectionless_ protocol designed for _low-latency_ and time-sensitive (may be not reliable & ordered) communication.
 
 - No handshake or connection establishment is required.
 
@@ -1971,51 +1927,51 @@ nc [options] [hostname] [port]
 
 1. Establishing TCP | UDP connections (Connect to a specific host and port)
 
-    ```bash
-    nc example.com 80
-    ```
+   ```bash
+   nc example.com 80
+   ```
 
-    \*"Establishing a UDP connection" is a linguistic simplification or abstraction, because UDP is _connectionless_.
+   \*"Establishing a UDP connection" is a linguistic simplification or abstraction, because UDP is _connectionless_.
 
 2. Simple web request (Send a raw HTTP request)
 
-    ```bash
-    nc example.com 80
-    GET / HTTP/1.1
-    Host: example.com
-    ```
+   ```bash
+   nc example.com 80
+   GET / HTTP/1.1
+   Host: example.com
+   ```
 
-    Press `Enter` twice to complete the request.
+   Press `Enter` twice to complete the request.
 
 3. Open port scanning
 
-    ```bash
-    nc -zv example.com 20-80
-    ```
+   ```bash
+   nc -zv example.com 20-80
+   ```
 
 4. File Transfer
 
-    ```bash
-    nc -l -p 1234 < file.txt        # Server side (send a file)
-    nc server_ip 1234 > file.txt    # Client side (receive a file)
-    ```
+   ```bash
+   nc -l -p 1234 < file.txt        # Server side (send a file)
+   nc server_ip 1234 > file.txt    # Client side (receive a file)
+   ```
 
 5. Chat Between Two Machines
 
-    ```bash
-    nc -l -p 1234                   # Server side (set up a chat server)
-    nc server_ip 1234               # Client side (connect to the server)
-    ```
+   ```bash
+   nc -l -p 1234                   # Server side (set up a chat server)
+   nc server_ip 1234               # Client side (connect to the server)
+   ```
 
 6. Create a TCP/UDP Server
 
-    ```bash
-    nc -l -p 1234                   # TCP
-    nc -l -u -p 1234                # UDP
+   ```bash
+   nc -l -p 1234                   # TCP
+   nc -l -u -p 1234                # UDP
 
-    # from another terminal to send http request
-    curl -i "http://localhost:1234/p/a/t/h?text=cats&query=dogs"
-    ```
+   # from another terminal to send http request
+   curl -i "http://localhost:1234/p/a/t/h?text=cats&query=dogs"
+   ```
 
 ### POCO C++ library
 
@@ -2096,7 +2052,7 @@ square(int):
         ret
 ```
 
-Compiler knows that infinite loop is UB, so there is only 1 option in trying to avoid it: return n * n without doing loop.  
+Compiler knows that infinite loop is UB, so there is only 1 option in trying to avoid it: return n \* n without doing loop.  
 But it's still UB, that's why in case of UB behavior is unpredictable.
 
 ## Passing by value
@@ -2111,7 +2067,7 @@ struct Vector {
 };
 
 void foo(Vector& vec) {
-    for (std::size_t i = 0; i < vec.size; ++i) {
+    for (size_t i = 0; i < vec.size; ++i) {
         vec.arr[i] = 0;
     }
 }
@@ -2128,7 +2084,7 @@ struct Vector {
 void foo(Vector& vec) {
     int size = vec.size;
 
-    for (std::size_t i = 0; i < size; ++i) {
+    for (size_t i = 0; i < size; ++i) {
         vec.arr[i] = 0;
     }
 }
@@ -2155,54 +2111,54 @@ Benefits:
 ### Structure
 
 1. Product:  
-    The interface or abstract base class for objects the factory will create.
+   The interface or abstract base class for objects the factory will create.
 
-    ```cpp
-    class Button {
-    public:
-        virtual void render() = 0;
-        virtual ~Button() = default;
-    };
-    ```
+   ```cpp
+   class Button {
+   public:
+       virtual void render() = 0;
+       virtual ~Button() = default;
+   };
+   ```
 
 2. ConcreteProduct:  
-    The specific implementation of the Product.
+   The specific implementation of the Product.
 
-    ```cpp
-    class WindowsButton : public Button { ... };
+   ```cpp
+   class WindowsButton : public Button { ... };
 
-    class MacOSButton : public Button { ... };
-    ```
+   class MacOSButton : public Button { ... };
+   ```
 
 3. Creator:  
-    Declares the factory method which returns a Product object.
+   Declares the factory method which returns a Product object.
 
-    ```cpp
-    class Dialog {
-    public:
-        virtual Button* createButton() = 0;
-        virtual ~Dialog() = default;
-    };
-    ```
+   ```cpp
+   class Dialog {
+   public:
+       virtual Button* createButton() = 0;
+       virtual ~Dialog() = default;
+   };
+   ```
 
 4. ConcreteCreator:  
-    Overrides the factory method to create specific ConcreteProduct objects.
+   Overrides the factory method to create specific ConcreteProduct objects.
 
-    ```cpp
-    class WindowsDialog : public Dialog {
-    public:
-        Button* createButton() override {
-            return new WindowsButton();
-        }
-    };
+   ```cpp
+   class WindowsDialog : public Dialog {
+   public:
+       Button* createButton() override {
+           return new WindowsButton();
+       }
+   };
 
-    class MacOSDialog : public Dialog {
-    public:
-        Button* createButton() override {
-            return new MacOSButton();
-        }
-    };
-    ```
+   class MacOSDialog : public Dialog {
+   public:
+       Button* createButton() override {
+           return new MacOSButton();
+       }
+   };
+   ```
 
 Client:
 
@@ -2239,74 +2195,74 @@ Additional benefits:
 
 ### Difference from Factory Method
 
-Factory method focuses on creating a *single* product through a method that subclasses can override to decide which concrete class to instantiate.
+Factory method focuses on creating a _single_ product through a method that subclasses can override to decide which concrete class to instantiate.
 
 ### Structure
 
 1. Abstract Product:  
-    Defines the interface for product objects.
+   Defines the interface for product objects.
 
-    ```cpp
-    class Button {
-    public:
-        virtual void render() = 0;
-        virtual ~Button() = default;
-    };
+   ```cpp
+   class Button {
+   public:
+       virtual void render() = 0;
+       virtual ~Button() = default;
+   };
 
-    class Checkbox {
-    public:
-        virtual void check() = 0;
-        virtual ~Checkbox() = default;
-    };
-    ```
+   class Checkbox {
+   public:
+       virtual void check() = 0;
+       virtual ~Checkbox() = default;
+   };
+   ```
 
 2. Concrete Product:  
-    Implements the abstract product interface for a specific variant.
+   Implements the abstract product interface for a specific variant.
 
-    ```cpp
-    class WindowsButton : public Button { ... };
-    class WindowsCheckbox : public Checkbox { ... };
+   ```cpp
+   class WindowsButton : public Button { ... };
+   class WindowsCheckbox : public Checkbox { ... };
 
-    class MacOSButton : public Button { ... };
-    class MacOSCheckbox : public Checkbox { ... };
-    ```
+   class MacOSButton : public Button { ... };
+   class MacOSCheckbox : public Checkbox { ... };
+   ```
 
 3. Abstract Factory:  
-    Declares creation methods for each product family.
+   Declares creation methods for each product family.
 
-    ```cpp
-    class GUIFactory {
-    public:
-        virtual Button* createButton() = 0;
-        virtual Checkbox* createCheckbox() = 0;
-        virtual ~GUIFactory() = default;
-    };
-    ```
+   ```cpp
+   class GUIFactory {
+   public:
+       virtual Button* createButton() = 0;
+       virtual Checkbox* createCheckbox() = 0;
+       virtual ~GUIFactory() = default;
+   };
+   ```
 
 4. Concrete Factory:  
-    Implements creation methods for specific product families.
+   Implements creation methods for specific product families.
 
-    ```cpp
-    class WindowsFactory : public GUIFactory {
-    public:
-        Button* createButton() override {
-            return new WindowsButton();
-        }
-        Checkbox* createCheckbox() override {
-            return new WindowsCheckbox();
-        }
-    };
+   ```cpp
+   class WindowsFactory : public GUIFactory {
+   public:
+       Button* createButton() override {
+           return new WindowsButton();
+       }
+       Checkbox* createCheckbox() override {
+           return new WindowsCheckbox();
+       }
+   };
 
-    class MacOSFactory : public GUIFactory {
-    public:
-        Button* createButton() override {
-            return new MacOSButton();
-        }
-        Checkbox* createCheckbox() override {
-            return new MacOSCheckbox();
-        }
-    };
-    ```
+   class MacOSFactory : public GUIFactory {
+   public:
+       Button* createButton() override {
+           return new MacOSButton();
+       }
+       Checkbox* createCheckbox() override {
+           return new MacOSCheckbox();
+       }
+   };
+   ```
 
 Client:
 

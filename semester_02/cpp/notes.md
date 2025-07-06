@@ -478,15 +478,15 @@ concept SerializableToJson = IsSerializableToJson<T>::value;
    ```cpp
    class Base {
    public:
-       void display();
-       void display(int x);
+       void f();
+       void f(int x);
    };
 
    class Derived : public Base {
    public:
-       using Base::display;  // Brings Base::display() and Base::display(int) into Derived's scope
+       using Base::f;  // Brings Base::f() and Base::f(int) into Derived's scope
 
-       void display(double d) { ... }
+       void f(double d);
    };
    ```
 
@@ -495,7 +495,7 @@ concept SerializableToJson = IsSerializableToJson<T>::value;
    ```cpp
    class C : public A, public B {
    public:
-       using A::foo; // Resolves ambiguity if `foo` was in A and B
+       using A::foo;
    };
    ```
 

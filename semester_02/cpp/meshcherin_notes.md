@@ -185,9 +185,9 @@ C++ Standard Library:
 
 Library Variants:
 
-- **GCC** $\to$ `libstdc++`  
-- **Clang** $\to$ `libstdc++` or `libc++`  
-- **MSVC** $\to$ Microsoft STL  
+- **GCC** $\to$ `libstdc++`
+- **Clang** $\to$ `libstdc++` or `libc++`
+- **MSVC** $\to$ Microsoft STL
 
 # Lecture 7 - Stack, Static, Heap Memory
 
@@ -204,7 +204,7 @@ Library Variants:
 ```cpp
 int arr[3]{1, 2, 3};
 
-*arr  == arr[0];                                // **array-to-pointer conversion**
+*arr  == arr[0];    // **array-to-pointer conversion**
 
 // the same:
 arr[2];
@@ -213,21 +213,29 @@ arr[2];
 2[arr];
 
 int* p = a + 1;
-p[-1];                                          // totally okay, same as *((a + 1) - 1)
+p[-1];              // ok, *((a + 1) - 1) == *a
 ```
 
 ### Array VS Pointer
 
 ```cpp
 void f(int* arr);
+
 // the same as
+
 template <size_t N>
 void f(int arr[N]);
 ```
 
 ```cpp
-int* a[10];     // array of pointers
-int (*a)[10];   // pointer to array
+int* a;
+int b[N];       // b - pointer as well
+
+int* x[10];     // array of pointers
+*(x[0]);        // 1st element
+
+int (*y)[10];   // pointer to array
+(*y)[0];        // 1st element
 ```
 
 ### `char*`
@@ -256,6 +264,28 @@ Why Are VLAs Not in C++? $\to$ allocating large arrays on the stack can lead to 
 
 > Compilers generally strive to adhere strictly to the C++ standard.  
 > However, in practice, compilers may **violate** the C++ standard.
+
+## `std::size` & `sizeof`
+
+```cpp
+int a[N];
+std::size(a) == sizeof(a) / sizeof(*a);
+```
+
+## `std::reference_wrapper` & `std::ref`
+
+You can't do smth like:
+
+```cpp
+std::vector<T&> x;
+```
+
+But:
+
+```cpp
+std::vector<std::reference_wrapper<T>> v;
+v.push_back(std::ref(obj));
+```
 
 ## Function Pointer
 
@@ -727,7 +757,22 @@ private:    // to this & friends
 }
 ```
 
-Access modifiers don't affect **scope resolution** (visibility) at all, only **accessibility**.
+Access modifiers don't affect **scope resolution** (**visibility**) at all, only **accessibility**.
+
+**TQ**:
+
+```cpp
+class A {
+public:
+    void f(double x);
+
+private:
+    void f(int x);
+};
+
+A a;
+a.f(1); // CE: 'f' is a private member of 'A'
+```
 
 When accessing smth: 1. In scope? $\to$ 2. Accessable?
 
@@ -801,7 +846,7 @@ public:
 
 `friend` is not inheritable.
 
-### best
+> Best Practice:
 
 ```cpp
 // class B;    // no need
@@ -810,8 +855,7 @@ class A {
     friend class B;
 }
 
-class B {
-}
+class B {}
 ```
 
 ### "строгая мама не разрешает общаться с доброй бабушкой"
@@ -982,7 +1026,7 @@ A class gets a **vtable** if:
 
 ## Destructor
 
-> Make your base desrtuctor `virtual`
+> Always make your base desrtuctor `virtual`, even if there's no dynamic memory in `Derived`.
 
 ```cpp
 class A {
@@ -1000,7 +1044,7 @@ public:
     }
 };
 
-A* a = new B{};
+A* a = new B();
 delete a;   // "~B~A", without `virtual` only "~A"
 ```
 
@@ -1344,8 +1388,8 @@ b.interface();  // Base default impl
 
 1. cause core dumps (OS-level)
 2. throw **exceptions** (language-level)
-segmentation fault
-OS-level runtime errors _can't_ be `try`-`catch`ed:
+   segmentation fault
+   OS-level runtime errors _can't_ be `try`-`catch`ed:
 
 ```cpp
 try {
@@ -1434,57 +1478,15 @@ When talking about any container, we should think about:
 1. How Iterator will work
 2. Invalidatiton of pointers/references/iterators
 3. Exception safety
+4. Allocator-awaring
 
 ## `std::vector`
 
 ### `reserve`
 
-> **"How to implement `push_back` of vector"** - single greatest questions to know someone's level of C++ knowleadge.
+> **"How to implement `reserve` of vector"** - single greatest questions to know someone's level of C++ knowleadge.
 
-```cpp
-template <typename T>
-class Vector {
-public:
-    void Reserve(size_t newcap) {
-        if (newcap <= cap_) {
-            return;
-        }
-
-        // T* newarr = new T[newcap];
-        // but `T` might not have default constructor & we don't want to use it
-        T* newarr = reinterpret_cast<T*>(new char[newcap * sizeof(T)]);
-
-        size_t i = 0;
-        try {   // Strong Exception Guarantee
-            for (; i < size_; ++i) {
-                // newarr[i] = std::move(arr[i]);
-                // `newarr[i]`'s object of `T` type is invalid, so usage `operator=` is UB
-                new (newarr + i) T(std::move(arr_[i]));
-            }
-        } catch (...) {
-            for (size_t j = 0; j < i; ++j) {
-                (newarr + j)->~T();
-            }
-            delete[] reinterpret_cast<char*>(newarr);
-
-            throw;
-        }
-
-        for (size_t i = 0; i < size_; ++i) {
-            (arr_ + i)->~T();
-        }
-        delete[] reinterpret_cast<char*>(arr_);
-
-        arr_ = newarr;
-        cap_ = newcap;
-    }
-
-private:
-    T* arr_;
-    size_t cap_;
-    size_t size_;
-};
-```
+Check [vector](https://github.com/vbalab/cpp_vector_implementation).
 
 ### `reserve` vs `resize`
 
@@ -1504,33 +1506,33 @@ Theoretical maximum number of elements the container could hold, Determined by t
 
 1. **Pointer invalidation** on potential reallocation
 
-    ```cpp
-    T* p = &vec[0];
-    vec.push_back(T());
-    *p;                     // UB
-    ```
+   ```cpp
+   T* p = &vec[0];
+   vec.push_back(T());
+   *p;                     // UB
+   ```
 
 2. **Reference invalidation** on potential reallocation, because reference is stored as pointer internally
 
-    ```cpp
-    T& r = vec[0];
-    vec.push_back(T());
-    r;                      // UB
-    ```
+   ```cpp
+   T& r = vec[0];
+   vec.push_back(T());
+   r;                      // UB
+   ```
 
 3. **Iterator invalidation** on potential reallocation, because `it` holds `T*`
 
-    ```cpp
-    std::vector<T>::iterator it = vec.begin();
-    vec.push_back(T());
-    *it;                    // UB
-    ```
+   ```cpp
+   std::vector<T>::iterator it = vec.begin();
+   vec.push_back(T());
+   *it;                    // UB
+   ```
 
-> `std::deque` doesn't invalidate on push.
+> `std::deque` doesn't invalidate `*`/`&` on push, only iterator is invalidated.
 
 ## Iterators
 
-Pointer is iterator, because it has `operator*`, `operator+`, `operator==`.  
+Raw pointer is iterator, because it has `operator*`, `operator+`, `operator==`.  
 Smart pointers are not iterators, because they have no `operator+`.
 
 ### Range-based `for`
@@ -1539,12 +1541,13 @@ Smart pointers are not iterators, because they have no `operator+`.
 for (auto& val : v) {
     val;
 }
+
 // it get's parsed as:
 std::vector<T>::iterator end = v.end();
 for (std::vector<T>::iterator it = v.begin(); it != end; ++it) {
     auto& val = *it;
 }
-// so it just needs `begin` & `end`
+// so it just needs `begin` & `end` overloaded
 ```
 
 ## How to know template type?
@@ -1746,21 +1749,21 @@ int main() {
 }
 ```
 
-# Lecture 34  - `std::unordered_map`
+# Lecture 34 - `std::unordered_map`
 
 ## Implementation
 
 `std::unordered_map` tries to be versatile by having iterators with full bypass from `begin` to `end` in O(#elements), not O(capacity).
 
 1. GCC’s & clang:
-    Buckets are stored in `__node** _M_buckets` (like `std::vector<node*>`).
+   Buckets are stored in `__node** _M_buckets` (like `std::vector<node*>`).
 
-    `_M_buckets[i]` actually points to the node immediately before the first element of bucket `i`, so that `_M_buckets[i]->next` is the bucket’s true head.  
-    This **“predecessor” trick** lets erasure run in constant time without a backward pointer.
+   `_M_buckets[i]` actually points to the node immediately before the first element of bucket `i`, so that `_M_buckets[i]->next` is the bucket’s true head.  
+   This **“predecessor” trick** lets erasure run in constant time without a backward pointer.
 
 2. Microsoft’s STL:
-    1. `std::vector<list<value_type>::iterator>` where buckets are stored
-    2. one doubly-linked `std::list` where all elements live (nodes sorted by bucket index)
+   1. `std::vector<list<value_type>::iterator>` where buckets are stored
+   2. one doubly-linked `std::list` where all elements live (nodes sorted by bucket index)
 
 ## Iterator
 
@@ -1779,3 +1782,169 @@ C++ standard guarantees at least a forward iterator.
 > # PART 9: Allocators & Memory Management
 
 # Lecture 35 - Allocators
+
+> Container $\to$ allocator_traits $\to$ Allocator $\to$ operator new $\to$ malloc $\to$ OS.
+
+## Allocator
+
+```cpp
+template <typename T>
+struct Allocator {
+    T* allocate(size_t count) {
+        // 1.
+        // T* buffer = new T[count];
+        // `T` might not have default constructor. And even if it did - we don't want to use it
+
+        // 2.
+        // T* buffer = reinterpret_cast<T*>(new char[count * sizeof(T)]);
+        // still it does unnecessary constuction of `char`
+        // need to `reinterpret_cast<char*>` back when `delete[]`
+
+        // 3.
+        T* buffer = static_cast<T*>(::operator new(count * sizeof(T)));
+        // it's not `new`, but function `operator new` - 1st part of `new`
+
+        return buffer;
+    }
+
+    deallocate(T* ptr, size_t /*n*/) {
+        // delete[] ptr;
+
+        // delete[] reinterpret_cast<char*>(ptr);
+
+        ::operator delete(ptr);
+    }
+
+    // may implement other methods: construct, destroy, ...
+};
+```
+
+## Allocator Traits
+
+```cpp
+template <typename Alloc>
+struct AllocatorTraits {
+    template <typename U, typename... Args>
+    static void construct(Alloc alloc, U* ptr, Args&&... args) {
+        if constexpr (/*has construct*/) {
+            alloc.construct(ptr, args);
+        } else {
+            new (ptr) U(std::forward<Args>(args)...);  // placement new
+        }
+    }
+
+    template <typename U>
+    static void destroy(Alloc alloc, U* ptr) {
+        if constexpr (/*has construct*/) {
+            alloc.destroy(ptr);
+        } else {
+            ptr->~U();
+        }
+    }
+
+    // the same way:
+    // allocate
+    // deallocate
+    // ...
+};
+```
+
+# Lecture 36 - Allocation-aware Containers, `new` & `delete` overloading
+
+## Allocator-aware Copy Assignment
+
+```cpp
+Alloc newalloc = AllocTraits::propagate_on_container_copy_assignment::value ? other.alloc_ : alloc_;
+```
+
+## `new`
+
+```cpp
+void* operator_new_impl(size_t size) {
+    if (size == 0) {
+        size = 1;   // !
+    }
+    void* p;
+
+    while ((p = malloc(size)) == nullptr) {
+        std::new_handler nh = std::get_new_handler();   // https://en.cppreference.com/w/cpp/memory/new/set_new_handler
+        
+        if (nh) {
+            nh()
+        } else {
+            break;
+        }
+    }
+
+    return p;
+}
+
+void* operator new(size_t size /*bytes*/) {
+    void* p = operator_new_impl(size)
+
+    if (p == nullptr) {
+        __throw_bad_alloc_shim();
+    }
+
+    return p;
+}
+```
+
+operator `new` consists of 2 parts:
+
+1. **function** `operator new`: memory allocation - **can be overrided**
+
+   ```cpp
+   static_cast<T*>(::operator new(n))  // :: <- to use globally defined, if you're in a class
+   ```
+
+2. **placement new**: constructor (of given type on allocated memory) - **can't be overrided**
+
+   ```cpp
+   new (ptr) T(std::forward(args)...);
+   ```
+
+## `delete`
+
+```cpp
+void operator delete(void* ptr) {
+    free(ptr);
+}
+```
+
+operator `delete` consists of 2 parts:
+
+1. destructor - **can't**
+
+   ```cpp
+   ptr->~T();
+   ```
+
+2. **function** `operator delete` - **can**
+
+   ```cpp
+   ::operator delete(ptr);
+   ```
+
+# Lecture 37 - Varieties of `new`
+
+If `new` throws $\to$ standard guarantees that `delete` will be used automatically!
+
+## Overriding `new`
+
+`new` is already defined in `std`, when we override it globally there's no error of **redefinition**, because in `std` it is declared as `_LIBCPP_WEAK` (for llvm) and can be just overrided.
+
+## Bit Fields
+
+```cpp
+struct S {
+    unsigned char b1 : 3;
+    unsigned char    : 2;
+    unsigned char b2 : 6;
+    unsigned char b3 : 2;
+}
+```
+
+# Lecture 38 - Scoped Allocators, Move Semantic
+
+[38](https://www.youtube.com/watch?v=CSDzObQOguo)
