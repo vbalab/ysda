@@ -381,20 +381,32 @@ int& const cref = x;    // CE
 
 ## Lifetime Expansion
 
-**Lifetime expansion** of temporary object:
+**Lifetime expansion** of temporary object on definition:
 
 ```cpp
-const int& ref = 1;     // 1. lifetime expansion via const reference
-int&& rref = 1;         // 2. lifetime expansion via rvalue reference
+const int& ref = 1;
+int&& rref = 1;
 
 // the same with functions:
 void f(const T& val);
 void f(T&& val);
-f(1);
+```
 
-// ---
+But there is no lifetime expansion on return:
 
+```cpp
+const T& f() {
+    return 1;   // warning: returning reference to local temporary object
+}
+
+T&& g() {
+    return 1;   // warning: returning reference to local temporary object
+}
+```
+
+```cpp
 int& ref = 1;           // CE
+
 void f(T& val);
 f(1);                   // CE
 ```
@@ -612,7 +624,7 @@ In cases where other constructors exist, explicitly declaring an implicit constr
 
 1. SFINAE
 
-2. using `concept`s and `require`
+2. using `concept`s and `requires`
 
 3. `delete`
 
@@ -1467,6 +1479,8 @@ void q() noexcept(noexcept(p<T>()));
 
 _Destructors_ are `noexcept` by default from C++11, to disable this, use `noexcept(false)`.
 
+> When program is terminated, the **stack unwinds** and all the objects call their destructors.
+
 ## [Exception safety](https://en.cppreference.com/w/cpp/language/exceptions.html)
 
 **Strong exception guarantee** — If the function throws an exception, the state of the program is rolled back to the state just before the function call (for example, `std::vector::push_back`).
@@ -1497,6 +1511,18 @@ Check [vector](https://github.com/vbalab/cpp_vector_implementation).
 ### `max_size`
 
 Theoretical maximum number of elements the container could hold, Determined by the container’s `size_type` (often `std::size_t`) and the allocator’s limitations—typically something like `SIZE_MAX / sizeof(T)`.
+
+### `std::vector<bool>`
+
+Doesn't store store `bool`s as a contiguous array, but rather stores as a bit mask.
+
+```cpp
+template <typename T>
+void f(T) = delete;
+
+std::vector<bool> v{true};
+f(v[0]);    // `std::_Bit_reference`, not `bool`
+```
 
 # Lecture 29 - `std::deque`, Iterators
 
@@ -1554,21 +1580,15 @@ for (std::vector<T>::iterator it = v.begin(); it != end; ++it) {
 
 ```cpp
 template <typename T>
-void Info(T) = delete;
+void f(T) = delete;     // check argument type
 
-Info(...);  // throws error with specifying type `T`
-```
-
-### `std::vector<bool>`
-
-Doesn't store store `bool`s as a contiguous array, but rather stores as a bit mask.
-
-```cpp
 template <typename T>
-void f(T) = delete;
+void g() = delete;      // check type
 
-std::vector<bool> v{true};
-f(v[0]);    // `std::_Bit_reference`, not `bool`
+int&& x = 0;
+
+f(x);                       // [with T = int]
+g<decltype(x)>();           // [with T = int&&]
 ```
 
 # Lecture 30 - Iterators, Adapters
@@ -1868,7 +1888,7 @@ void* operator_new_impl(size_t size) {
 
     while ((p = malloc(size)) == nullptr) {
         std::new_handler nh = std::get_new_handler();   // https://en.cppreference.com/w/cpp/memory/new/set_new_handler
-        
+
         if (nh) {
             nh()
         } else {
@@ -1945,6 +1965,320 @@ struct S {
 }
 ```
 
+> # Part 10: Move Semantic
+
 # Lecture 38 - Scoped Allocators, Move Semantic
 
 [38](https://www.youtube.com/watch?v=CSDzObQOguo)
+
+# TODO: tg
+
+# Lecture 39 - `std::move`, lvalue & rvalue
+
+## Move Constructor
+
+```cpp
+class S {
+public:
+    S(const S& other) : str_(other.str_) {}
+    S(S&& other) : str_(std::move(other.str_)) {}
+private:
+    std::string str_;
+};
+```
+
+## `std::move`
+
+```cpp
+template <typename T>
+void swap(T& x, T& y) {
+    T tmp = std::move(x);
+    x = std::move(y);
+    y = std::move(tmp);
+}
+```
+
+# Lecture 40 - `&&`
+
+![Analoges](notes_images/analoges.png)
+
+## `&&` qualifier
+
+```cpp
+struct S {
+    S& operator=() & {
+        ...
+    }
+
+    void operator=() && {}
+}
+
+// so that "(a + b) = 3;" will do nothing, but `a = 3;` will do copy assignment.
+```
+
+```cpp
+template <typename T>
+class S {
+public:
+    T GetData() const & {   // but there's no difference if `const` and `const &` HERE
+        return data_;
+    }
+
+    T GetData() && {
+        return std::move(data_);
+    }
+private:
+    T data_;
+}
+```
+
+# Lecture 41 - `std::forward`, `push_back`
+
+## `std::move_if_noexcept`
+
+`std::move_if_noexcept`:
+
+- if the type's move constructor could `throw` and the type is copyable $\to$ copy.
+- otherwise, `std::move`
+
+> Mark _move constructor_ `noexcept` for `std::move_if_noexcept`, which is used in `std` containers.
+
+## `std::vector::push_back`
+
+```cpp
+vec.push_back(vec[10]);
+```
+
+$\to$ first we push back, then we try to re`reserve` if we need, otherwise `vec[10]` is invalidated before pushing back.
+
+# Lecture 42 - Value Types, Copy Elision, RVO
+
+To work with Move Semantics we need to know only about lvalue & rvalue.
+
+Knowledge of glvalue, xvalue, prvalue are for copy elision.
+
+## Copy Elision && RVO
+
+**Copy elision** - omitting copy/move assignment/constructor, _even if_ copy/move constructor has side effects.
+
+1. (Optional) Temporary to local variable:
+
+   ```cpp
+   T x = T();
+   T x = T(T(T(T(T()))));
+   ```
+
+2. (Guaranteed) **RVO** - return value optimization:
+
+   ```cpp
+   template <typename T>
+   T f() {
+       return T(); // **unnamed** temporary object
+   }
+   ```
+
+3. (Optional) **NRVO** - named RVO:
+
+   ```cpp
+   template <typename T>
+   T f() {
+       T x();
+       return x;   // **named** object
+   }
+   ```
+
+4. (Optional) Throwing/catching exceptions
+
+   ```cpp
+   throw T();     // S constructed directly in exception storage
+   ```
+
+5. (Optional) Aggregate initialization
+
+   ```cpp
+   T x = { ... };  // direct initialization, copy/move may be elided
+   ```
+
+Copy elision works only for _prvalue_.
+
+```cpp
+T x = std::move(T());   // xvalue -> won't work
+```
+
+## Yet another optimization
+
+```cpp
+T f(T x) {
+    return x;
+}
+```
+
+Will be optimized to move (not copy) constructor, because `x` is _local_ variable.
+
+> # PART 11 - Type Deduction
+
+# Lecture 43 - `auto`, `decltype`, `declyte(auto)`
+
+## `auto`
+
+Type deduction works like with templates.
+
+**TQ** will it compile? - yes!
+
+```cpp
+template <typename T>
+auto f(T x) {
+    if constexpr(std::is_same_v<T, int>) {
+        return "abc";
+    } else {
+        return 1;
+    }
+}
+
+f(1);
+f(true);
+```
+
+**TQ** will it compile? - NO!!!
+
+```cpp
+template <typename T>
+auto f(T x) {
+    if constexpr(std::is_same_v<T, int>) {
+        return "abc";
+    }
+    return 1;
+}
+
+f(1);
+f(true);    // CE: 'auto' in return type deduced as 'int' here but deduced as 'const char *' in earlier return statement
+```
+
+### `auto` Arguments (C++20)
+
+```cpp
+template <typename T
+void f(T);
+
+// now you can:
+void f(auto);
+
+// and even:
+void f(auto&&...);
+```
+
+They are almost the same, (but there some small nuances).
+
+But:
+
+```cpp
+std::vector<auto> v({1}); // CE: 'auto' not allowed in template argument
+std::vector v({1});       // do this :)
+```
+
+### `auto` Template Parameters (C++20)
+
+```cpp
+template <auto N>
+struct S;
+
+S<1>();
+S<'a'>();
+S<true>();
+```
+
+## `decltype`
+
+> decltype is evaluated at compile time
+
+```cpp
+int x = 0;
+decltype(++x) y = ++x;  // warning: "Expression with side effects has no effect in an unevaluated context"
+// x == y == 1
+```
+
+```cpp
+int x = 0;
+decltype((x)) y = x;    // decltype((x)) == int&
+```
+
+# Lecture 44 - ...
+
+# Lecture 45 - ...
+
+# Lecture 46 - Smart Pointers
+
+## `std::unique_ptr` & `std::make_unique`
+
+```cpp
+template <typename T>
+class UniquePtr {
+public:
+    UniquePtr() : ptr_(nullptr) {
+    }
+    UniquePtr(T* ptr) : ptr_(ptr) {
+    }
+
+    ~UniquePtr() {
+        delete ptr_;
+    }
+
+    UniquePtr(const UniquePtr&) = delete;
+    void operator=(const UniquePtr&) = delete;
+
+    UniquePtr(UniquePtr<T>&& other) : ptr_(other.ptr_) {
+        other.ptr_ = nullptr;
+    }
+
+    UniquePtr& operator=(UniquePtr<T>&& other) {
+        if (this != &other) {
+            delete ptr_;
+            ptr_ = std::exchange(other.ptr_, nullptr);
+            // ptr_ = other.ptr_;
+            // other.ptr_ = nullptr;
+        }
+
+        return *this;
+    }
+
+    T& operator*() const noexcept(noexcept(*std::declval<T*>())) {
+        // UB, if `ptr_ == nullptr`
+        return *ptr_;
+    }
+
+    T* operator->() const {
+        return ptr_;
+    }
+
+private:
+    T* ptr_;
+};
+
+template <typename T, typename... Args>
+UniquePtr<T>& MakeUnique(Args&&... args) {
+    T* ptr = new T(std::forward<Args>(args)...);
+    return UniquePtr(ptr);
+}
+```
+
+## `std::shared_ptr` & `std::make_shared`
+
+`std::make_shared` is used to:
+
+- no manual `new` and raw pointers
+- _single_ allocation
+- avoids order-of-evaluation issues pre-C++17 like `f(std::unique_ptr<T>(new T(...)), g())`
+
+# Lecture 47 - Smart Pointers, Type Erasure
+
+## Smart Pointers Nuances
+
+The difficulty of implementation raises exponensially if we account for:
+
+- `std::enable_shared_from_this`
+  - with class inheritance
+
+- `std::static_pointer_cast`, `std::dynamic_pointer_cast`, `std::const_pointer_cast`, `std::reinterpret_pointer_cast`
+
+## `std::any`
+

@@ -1,0 +1,100 @@
+\documentclass{article}
+
+\usepackage[a4paper, margin=0.75in]{geometry} % Adjust margin here
+\usepackage{cmap}  % should be before fontenc
+\usepackage[T2A]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage[russian]{babel}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{amsthm}
+\usepackage[pdftex,colorlinks=true,linkcolor=blue,urlcolor=red,unicode=true,hyperfootnotes=false,bookmarksnumbered]{hyperref}
+\usepackage{indentfirst}
+
+\newtheorem{lemma}{Лемма}  % создаёт команд для лемм
+\newtheorem{theorem}{Теорема}  % создаёт команд для теорем
+
+\newcommand{\E}{\ensuremath{\mathsf{E}}}  % матожидание
+\newcommand{\D}{\ensuremath{\mathsf{D}}}  % дисперсия
+\newcommand{\Prb}{\ensuremath{\mathsf{P}}}  % вероятностная мера
+
+\newcommand{\eps}{\varepsilon}  % эпсилон
+\renewcommand{\phi}{\varphi}    % фи
+
+\renewcommand{\le}{\leqslant}   % <=
+\renewcommand{\leq}{\leqslant}  % <=
+\renewcommand{\ge}{\geqslant}   % >=
+\renewcommand{\geq}{\geqslant}  % >=
+
+\pagestyle{myheadings}
+\markright{Владислав Балабаев, vbalab\hfill}
+
+\begin{document}
+
+\section{Алгоритм решения}
+
+Обозначим через $V$ множество значений количества слитков у людей, где $v_i$ — количество слитков у человека $i$, где $v_i \in [1, \bar{V}]$.
+
+\begin{enumerate}
+    \item Инициализируем границы бинарного поиска:
+          \[
+              \texttt{left\_ptr} = 0,\quad \texttt{right\_ptr} = \max\{v_i : v_i \in V\} + 1
+          \]
+
+    \item Повторяем, пока $\texttt{right\_ptr} - \texttt{left\_ptr} > 1$:
+          \begin{itemize}
+              \item Вычисляем $\texttt{mid} = \left\lfloor \frac{\texttt{left\_ptr} + \texttt{right\_ptr}}{2} \right\rfloor$;
+              \item Проверяем возможность перераспределения, \textcolor{blue}{которое определим как $I(maxFlow = \sum{v_i})$ (где $I$ - ф. индикатор)}, с ограничением не более чем \texttt{mid} слитков у одного человека;
+              \item Если возможно — обновляем \texttt{right\_ptr}, иначе — \texttt{left\_ptr}.
+          \end{itemize}
+
+    \item Ответ — минимальное допустимое значение \texttt{right\_ptr}.
+\end{enumerate}
+
+\subsection{Проверка перераспределения через поток}
+
+Построим сеть:
+\begin{itemize}
+    \item Исток $s$ соединяется со всеми вершинами (людьми) — пропускная способность $v_i$;
+    \item Из каждой вершины \textcolor{blue}{кроме $s$ и $t$ выходят два типа ребер}:
+          \begin{enumerate}
+              \item В другие вершины по графу доверия — с пропускной способностью \textcolor{blue}{$\sum{v_i}$ (из-за невозможности передать больше, чем в системе)};
+              \item В сток $t$ — с пропускной способностью, равной \texttt{mid}.
+          \end{enumerate}
+\end{itemize}
+
+Алгоритм поиска потока — Эдмондса-Карпа.
+
+\section{Корректность}
+
+\begin{lemma}
+    Функция проверки возможности перераспределения монотонна по \texttt{mid}.
+\end{lemma}
+
+\begin{proof}
+    \textcolor{blue}{На лекции было показано, что максимальный поток равен количеству, вытекающему из истока, и совпадает с количеством, втекающим в сток.}
+    При увеличении \texttt{mid} возрастает пропускная способность рёбер в сток, что увеличивает или сохраняет величину максимального потока. Следовательно, если перераспределение невозможно при $k$, то оно также невозможно при всех $k' < k$.
+\end{proof}
+
+\begin{theorem}
+    Алгоритм бинарного поиска по ответу с использованием поиска потока корректен.
+\end{theorem}
+
+\begin{proof}
+    Следует из монотонности функции проверки и корректности алгоритма Эдмондса-Карпа для нахождения максимального потока.
+\end{proof}
+
+\section{Временная сложность}
+
+\begin{itemize}
+    \item Бинарный поиск: \textcolor{blue}{$O(\log \max{v_i})$};
+    \item Поиск потока Эдмондса-Карпа: $O(VE^2)$;
+\end{itemize}
+
+Общая сложность: \textcolor{blue}{$O(\log \max{v_i} \cdot VE^2)$}.
+
+\section{Затраты по памяти}
+
+Хранение графа требует $O(V + E)$ памяти. Остальные расходы пренебрежимо малы.
+
+\end{document}

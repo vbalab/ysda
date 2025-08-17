@@ -295,7 +295,7 @@ that happens before the actual program is compiled.
 
 ### Turing Completeness
 
-**Turing complete** programming language is one that can perform any computation that a **Turing machine**: conditionals (if-else), recursion, and the ability to store and manipulate data.
+**Turing complete** programming language - can perform any computation that a **Turing machine**: conditionals (if-else), recursion, and the ability to store and manipulate data.
 
 SQL is not turing complete, because it has no loops (recursion).
 
@@ -367,7 +367,7 @@ Advance(It& iterator, ptrdiff_t n) { ... }
 
 ### `concept` & `requires` (C++20)
 
-`concept` refers to a compile-time constraint that specifies the `require`ments for template arguments.
+`concept` - compile-time constraint that specifies the `require`ments for template arguments.
 
 Before C++20 it was done through **SFINAE**.
 
@@ -552,7 +552,7 @@ square(y);      // ERROR
 
 ## `decltype`
 
-`decltype` - deduce the type of a variable or expression at compile time.
+`decltype` - deduce the type (full type with references & const & ...) of a variable or expression at compile time.
 
 ```cpp
 const int x = 20;
@@ -560,7 +560,8 @@ decltype(x) y = x;  // `const int`
 ```
 
 ```cpp
-int foo() {...};
+int foo();
+
 decltype(foo) bar = foo;  // `int()`
 ```
 
@@ -571,23 +572,23 @@ auto add(T a, U b) -> decltype(a + b) {
 }
 ```
 
-## Return Type
+## Return Type Deduction
 
-### `auto` Return Type Deduction
+### `auto`
 
 C++14 introduced **return type deduction** for functions with `auto`.  
-This allows you to omit the explicit return type and let the compiler deduce it based on the function body _if it can_.
+Compiler deduce it based on the function body _if it can_.
 
 ```cpp
 template<typename T, typename U>
 auto add(T a, U b) {
-    return a + b;  // Return type is deduced based on a + b
+    return a + b;
 }
 ```
 
 But when compiler cannot deduce a _single_ return type, we need **explicit return type** OR **trailing return type**.
 
-### Trailing Return Type Deduction
+### Trailing Return
 
 Using `auto` with a trailing return type is useful when the return type is not easily known or depends on templates or complex expressions.
 
@@ -595,24 +596,26 @@ Using `auto` with a trailing return type is useful when the return type is not e
 
 ```cpp
 template <typename T, typename U>
-// std::optional<decltype(std::declval<T>() + std::declval<U>())> add(T a, U b) {
-auto add(T a, U b) -> std::optional<decltype(std::declval<T>() + std::declval<U>())> {
+auto add(T a, U b) -> std::optional<decltype(std::declval<T>() + b)> { // can use arguments!
     return a + b;
 }
 ```
 
-Basically, everything that you can do with `auto` + `->` can be done without it just specifying return type, so look for it.
+### `decltype(auto)` (C++14)
 
-#### lambda
+- `auto` strips references and top-level `const` qualifiers.
 
-```cpp
-auto lambda = []() -> std::optional<int> {...};
-```
-
-can be done without trailing return type:
+- `decltype(auto)` deduces the exact type of the expression
 
 ```cpp
-std::function<std::optional<int>()> lambda = []() {...};
+int& h();
+
+auto /*int*/ f() {
+    return h();
+}
+decltype(auto) /*int&*/ f() {
+    return h();
+}
 ```
 
 ## Type Traits

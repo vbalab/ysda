@@ -210,10 +210,6 @@ For small primitives using direct copying like `size_t` is better than `const si
 
 ---
 
-`std::any` - a type-safe way to store and retrieve values of any type, using type erasure.
-
----
-
 In `std::cout` use explicit **flushing** through `std::flush` or `std::endl` when you want to ensure the output is immediately displayed, such as in debugging or interactive applications.
 
 `std::cerr` is **unbuffered**, it doesn’t need explicit flushing.
@@ -239,71 +235,6 @@ By definition of signed integer: `-a == (~a) + 1`
 Nothing interesting.
 
 # Lecture 2 - RVO
-
-## Return Value Optimization (C++17)
-
-**RVO**: Optimizes away the copy for temporary objects returned by value.
-
-Say you have
-
-```cpp
-struct A {
-    A() {
-        std::cout << "Constructor\n";
-    }
-    A(const A&) {
-        std::cout << "Copy Constructor\n";
-    }
-    ~A() {
-        std::cout << "Destructor\n";
-    }
-};
-
-A CreateA() {
-    return A();
-}
-
-int main() {
-    A obj = CreateA();  // No copy or move constructor will be called due to RVO
-}
-```
-
-Output without RVO (if RVO were not applied):
-
-```txt
-Constructor
-Copy Constructor
-Destructor          // of original
-Destructor          // of copy
-```
-
-With RVO:
-
-```txt
-Constructor
-Destructor
-```
-
-### Named RVO
-
-RVO did for:
-
-```cpp
-template <typename T>
-T f() {
-    return T(); // **unnamed** temporary object
-}
-```
-
-**NRVO** allows for:
-
-```cpp
-template <typename T>
-T f() {
-    T x();
-    return x;   // **named** object
-}
-```
 
 ## .hpp & .cpp
 
@@ -462,7 +393,7 @@ By default, a lambda’s `operator()()` is `const`.
 ```cpp
 int i = 0;
 
-auto count = [i]() { 
+auto count = [i]() {
     ++i;    // CE
 };
 
@@ -562,123 +493,138 @@ for (auto x: vec | std::views::filter([](int x) { return x % 2 == 0; })
 
 ## lvalue & rvalue
 
-Object **has identity** if both:
+lvalue & rvalue - categories of **expressions**, not types!
 
-1. It occupies a distinct region of storage in memory
-2. Persists beyond a single expression
+| lvalue                                                           | rvalue                                  |
+| ---------------------------------------------------------------- | --------------------------------------- |
+| **Any variable used as expression**: `x`; string literal `"abc"` | literals: `42`, `true`, `nullptr`, etc. |
+| `a = b`, `a += b`, `a *= b`, `a &= b`                            | `a + b`, `a * b`, ..., `a && b`         |
+| `++a`, `--a`                                                     | `a++`, `a--`                            |
+| `*ptr`, `arr[i]`                                                 | `&val`                                  |
+| Function return type `T&`                                        | Function return type `T` or `T&&`       |
+| Casts to `T&`                                                    | Casts to `T` or `T&&`                   |
 
-Object **can be moved** if both:
+$\to$ `std::move` returns rvalue, because it's return type is `T&&`.
 
-1. It has a move constructor or move assignment operator defined (either explicitly or implicitly)
+## `T&&`
 
-2. The object is used in a context that allows moving — i.e., it’s an rvalue or xvalue (e.g., `std::move(x)`).
+`T&&` is `T&` plus:
 
-> If no move constructor is defined, the compiler may _fall back_ to a **copy**.
+1. when returned from a function, returns reference to rvalue
+2. can be initialized only by rvalue
 
-### Value Categories
+**TQ**:
 
-1. **glvalue** = lvalue || xvalue:
+```cpp
+int&& a = 0;                // now `a` - variable -> `a` - lvalue
+a = 1;
+int&& b = a;                // CE <- T&&` "2. can be initialized only by rvalue."
+int&& c = std::move(a);
+int&& d = static_cast<T&&>(a);
+```
 
-   - **lvalue** — named object in memory (has identity, persistent storage)
+### Reference
 
-   ```cpp
-   int x = 5;
-   int& ref = x;
-   x;          // lvalue
-   ref;        // lvalue
-   ```
+It is actually reference:
 
-   - xvalue
+```cpp
+int&& x = 0;
+int&& y = std::move(x);
+y = 1;
+x;  // 1
+```
 
-2. **rvalue** = prvalue || xvalue:
+**TQ**:
 
-   - **prvalue** — pure temporary value, no identity
+```cpp
+std::string x = "abc";
 
-   ```cpp
-   42;                 // prvalue
-   std::string("hi");  // prvalue
-   x + y;              // prvalue if x, y are ints
-   ```
+std::string&& y(std::move(x));  // `x` == "abc"
+std::string z(std::move(x));    // `x` == ""
+```
 
-   - xvalue
+### Lifetime Expansion
 
-3. **xvalue** = glvalue (has identity) && rvalue (can be moved) — movable, _expiring object_:
+```cpp
+int&& x = 0;    // lifetime expansion like with `const int&`
+```
 
-   ```cpp
-   std::move(x);  // xvalue
-   a[0];          // xvalue if a is std::vector<T>
-   ```
-
-### `++`
-
-- `++a` $\leftarrow$ lvalue;
-
-- `a++` $\leftarrow$ rvalue (creates a copy, does increment to `a`, returns copy);
-
-### `std::move`
-
-- See "can be moved" definition.
+## `std::move`
 
 ```cpp
 template<typename T>
 constexpr typename std::remove_reference<T>::type&& move(T&& t) noexcept {
     return static_cast<typename std::remove_reference<T>::type&&>(t);
 }
-// The cast to `&&` takes Move Constructor OR Move Assignment Operator depending on context
 ```
 
-Objects that can't be moved (and no copy will be taken) (CE):
+### `const`
 
-1. deleted move constructors
+> Move semantics & type qualifiers are orthogonal.
 
-2. holding resources that cannot be transferred (e.g., certain OS handles)
-
-3. `const` — since you can’t modify (move from) them
-
-#### Funny `std::move`
+**TQ**:
 
 ```cpp
-struct Thing {
-    int val;
-
-    Thing(Thing&& other) noexcept {
-        val = 100;    // funny, and std::move will be funny
-        // value = std::move(other.value); nope))
-        other.val = 10;
-    }
-};
-
-Thing t1(0);
-Thing t2 = std::move(t1); // invokes move constructor
-// t1.val == 10
-// t2.val == 100
-// LOL
+const int&& x = 0;
+int&& y = std::move(x);     // CE: "'typename std::remove_reference_t<const int &>' (aka 'const int') drops 'const' qualifier"
 ```
 
-## lvalue to rvalue conversion
+## `std::forward`
 
 ```cpp
-T x = y;
-// x.operator=(static_cast<T>(y));  // what really happens
+#include <type_traits>
+
+template <typename T>
+T&& forward(typename std::remove_reference_t<T>& x) {
+    return static_cast<T&&>(x);
+}
+
+template <typename T>
+T&& forward(typename std::remove_reference_t<T>&& x) {
+    static_assert(!std::is_lvalue_reference_t<_Tp>)
+    return static_cast<T&&>(x);
+}
 ```
 
-- x — **LHS** — modifiable (non-const) lvalue
-- y — **RHS** — lvalue-to-rvalue conversion applies
+This allows for **perfect forwarding** with `std::forward` that preserves the value category (lvalue or rvalue) of an argument.
 
-**lvalue-to-rvalue conversion**: If an lvalue expression is used in RHS, it is converted to a _prvalue_.
+## Universal/Forwarding Reference & Reference Collapsing
+
+**Reference collapsing** - how references behave when combined in _template parameters_.
+
+Reference Type $\rightarrow$ Result:
+
+- & + & = &
+- & + && (&& + &) = &
+- && + && = &&
 
 ```cpp
-int a = 10;
-int b = a;      // lvalue-to-rvalue conversion
-int c = a + b   // lvalue-to-rvalue conversion of both `a` and `b`
+template <typename T>
+void foo(T&& /*<- Forwarding Reference*/ arg) {
+    bar(std::forward<T>(arg));
+}
 
-void g(int);
-g(a);           // lvalue-to-rvalue conversion
+void bar(int& x) {};
 
-int& ref = a;   // no conversion
+void bar(int&& x) {};
+
+int x = 10;
+foo(x);             // T == int&
+foo(std::move(x))   // T == int
+foo(5);             // T == int
 ```
 
-> Don't confuse with `std::move` that casts it to _xvalue_ && moves when you do `x = std::move(y)`
+`std::remove_reference` strips references (& or &&) and gives just the type T.
+
+### `auto`
+
+It also works for `auto` not even as a function parameter:
+
+```cpp
+int x{};
+auto&& y = x;               // int&
+auto&& z = std::move(x);    // int&&
+```
 
 ## Rule of 3, 5, 0
 
@@ -690,7 +636,7 @@ If a class defines one of the following, it should define all 3,5:
 - Move Constructor
 - Move Assignment Operator
 
-**Rule of 0**: developers should avoid manually defining any of the special member functions whenever possible, leveraging automatic resource management techniques provided by C++ standard library utilities such as `std::unique_ptr`, `std::shared_ptr`, and other **RAII** (Resource Acquisition Is Initialization) patterns.
+**Rule of 0**: developers should avoid manually defining any of the special member functions whenever possible, leveraging RAII patterns.
 
 ```cpp
 class String {
@@ -775,7 +721,7 @@ int main() {
 
 By declaring a function as `noexcept`, you inform the compiler (and anyone reading the code) that the function will not throw an exception under any circumstances.
 
-## Construction Delegation
+### Construction Delegation
 
 **Delegating constructor** $\to$ constructor.
 
@@ -793,57 +739,6 @@ struct Header {
     }
 };
 ```
-
-## Reference Collapsing
-
-**Reference collapsing** dictates how references behave when combined, especially when working with template parameters.
-
-Reference Type $\rightarrow$ Result:
-
-- & + & = &
-- & + && (&& + &) = &
-- && + && = &&
-
-```cpp
-template <typename T>
-void foo(T&& arg) {
-    bar(std::forward<T>(arg));
-}
-
-void bar(int& x) {};
-
-void bar(int&& x) {};
-
-int x = 10;
-foo(x);             // T becomes int&
-foo(std::move(x))   // T becomes int
-foo(5);             // T becomes int
-```
-
-`std::remove_reference` strips references (& or &&) and gives just the type T.
-
-### `std::forward`
-
-```cpp
-#include <type_traits>
-
-template <typename T>
-T&& forward(typename std::remove_reference<T>::type& param) {
-    return static_cast<T&&>(param);
-}
-```
-
-This allows for **perfect forwarding** with `std::forward` that preserves the value category (lvalue or rvalue) of an argument.
-
-## Type Deduction
-
-```cpp
-int a = 10;
-decltype(a) b = 20;  // int
-auto c = 30;         // int
-```
-
-Type deduction determines the type of a variable or template parameter automatically, based on the context.
 
 # Lecture 6 - Dynamic Memory Allocation
 
@@ -1134,37 +1029,29 @@ std::shared_ptr<int> arr(new int[5]{1, 2, 3, 4, 5}, customArrayDeleter);
 Problem:
 
 ```cpp
-class S {
-public:
-    std::shared_ptr<S> getShared() {
-        return std::shared_ptr<S>(this);  // Incorrect!
-    }
-    ~S() {
-        std::cout << "S destroyed\n";
+struct S {
+    std::shared_ptr<S> GetObj() {
+        return std::shared_ptr<S>(this);
     }
 };
 
-int main() {
-    std::shared_ptr<S> ptr1 = std::make_shared<S>();
-    std::shared_ptr<S> ptr2 = ptr1->getShared();  // Separate reference count!
+auto ptr1 = std::make_shared<S>();
+auto ptr2 = ptr1->GetObj();
 
-    // `ptr1` and `ptr2` will try to delete `S` separately, leading to undefined behavior
-    return 0;
-}
+// two control blocks -> **double deletion** -> UB
 ```
 
-The way:
+Do:
 
 ```cpp
-class S : public std::enable_shared_from_this<S> {
-public:
+struct S : public std::enable_shared_from_this<S> {
     std::shared_ptr<S> getShared() {
-        return shared_from_this();  // Uses the existing control block
+        return shared_from_this();  // uses existing control block
     }
 };
 ```
 
-Avoid calling `shared_from_this()` in constructor, because it will cause UB since the control block is not yet fully set up.
+> Avoid calling `shared_from_this()` in constructor, because it will cause UB since the control block is not yet fully set up.
 
 ## `std::weak_ptr`
 
