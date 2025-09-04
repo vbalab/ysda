@@ -7,15 +7,17 @@ ssh balabaevvl@45.93.203.34
 ssh shad-gpu
 
 # scp /path/to/local/file username@remote_host:/path/to/remote/destination
-scp main.cu shad-gpu:.
-scp notes.md shad-gpu:.
+scp main.cu shad-gpu:cuda/
+scp notes.md shad-gpu:cuda/
 
 # scp username@remote_host:/path/to/remote/file /path/to/local/destination
-scp shad-gpu:main.cu .
-scp shad-gpu:notes.md .
+scp -r shad-gpu:cuda/* .
 ```
 
 # Lecture 1 - Intro
+
+Full C++ is supported for the **host** code.  
+However, only a subset of C++ is fully supported for the **device** code.
 
 ## `nvcc`
 
@@ -86,6 +88,8 @@ __global__ void KernelFunc();
 
 KernelFunc<<<gridDim, blockDim>>>();
 ```
+
+![alt text](notes_images/cuda_hierarchy.png)
 
 ### Thread
 
@@ -196,6 +200,8 @@ CUDA C++ $\to$ PTX (virtual ISA) $\to$ SASS (real ISA) $\to$ GPU
 
 Why JIT is used on GPUs?
 
+- Only way for applications to run on devices that did not exist at the time the application was compiled
+
 - Portability across GPU generations
 
 - Runtime-known constants (e.g., tensor shapes)
@@ -232,6 +238,14 @@ less -S stat
 
 # Lecture 3 - Blocks
 
+## CPU vs GPU
+
+![alt text](notes_images/cpuvsgpu1.png)
+
+![alt text](notes_images/cpuvsgpu2.png)
+
+> The GPU devotes more transistors to data processing but lucks functionality
+
 ## Synchronization
 
 All threads _within block_ should reach _the same_ `__syncthreads()`, otherwise deadlock.
@@ -240,7 +254,7 @@ All threads _within block_ should reach _the same_ `__syncthreads()`, otherwise 
 
 There is no synchronization between blocks.
 
-##
+## Indexing
 
 ```cpp
 constexpr size_t kElemenents = 1 << 12;
@@ -260,9 +274,120 @@ int warpIdx = linearThreadIdx / 32;
 int laneIdx = linearThreadIdx % 32;
 ```
 
-##
+## Streaming Multiprocessor (SM)
 
-SM & под-SM
-Варпы прибиты к под-SM
+> Modern SMs are often split internally into multiple partitions (**sub-SMs**).
 
-> 01:58:30
+- **SM**: has L1 data cache, shared memory, texture units, instruction cache _that sub-SMs can use_.
+
+- **sub-SM**: has its own L0 instruction cache, warp scheduler, register file, execution pipelines.
+
+![GPU of SMs](notes_images/gpu_sms.png)
+
+![One SM](notes_images/gpu_sm.png)
+
+Not all data types get dedicated hardware.  
+Other precisions (e.g. INT8, INT16, FP16, BF16, TF32) are executed on these _existing_ units.
+
+## Warp Scheduling
+
+**Zero overhead** for **warp-switching** (while switching context on CPU is heavy).
+
+## Control Divergence
+
+**Control divergence** - happens when threads in the same warp follow different execution paths due to conditional branches (`if`, `switch`, `for`, etc.).
+
+Divergence _reduces_ parallel efficiency, since only part of the warp is active at a time.
+
+![alt text](notes_images/control_divergence.png)
+
+### Independent Thread Scheduling
+
+Starting with Volta (Compute Capability 7.0), NVIDIA introduced **Independent Thread Scheduling**:  
+Each thread has _its own_ PC, call stack, and register state $\to$ divergent threads can progress without waiting for others.
+
+BUT: Requires **explicit synchronization** in some cases where programmers previously assumed implicit warp lockstep.  
+CUDA introduced `__syncwarp()` for this.
+
+![alt text](notes_images/independent_thread_scheduling.png)
+
+# Lecture 4 - Shared Memory
+
+```bash
+nvidia-smi dmon -i 1  # to see pwr, temp, mem, ...
+```
+
+## FLOP
+
+**FLOP** - single floating-point operation (e.g., `a + b`, `x * y`).
+
+**FLOPS** - FLOPs per second (a performance metric).
+
+| GPU               | FP32 (TFLOPS) | FP64 (TFLOPS) |
+|-------------------|---------------|---------------|
+| NVIDIA RTX 3090   | 35.6          | 0.56          |
+| NVIDIA A100       | 19.5          | 9.7           |
+| NVIDIA H100       | 67            | 34            |
+
+Compilers often optimize `a * b + c` into a single **FMA** instruction (counts as 2 FLOPs).
+
+**Arithmetic Intensity** = FLOP / B - FLOP per byte of memory transferred.  
+It helps analyze whether a kernel is **compute-bound** or **memory-bound**.
+
+| Kernel          | FLOP/B          | Bound    |
+|-----------------|-----------------|----------|
+| Matrix Multiply | $ \frac{N}{6} $ | Compute  |
+| Vector Add      | 0.08            | Memory   |
+| 3D Stencil      | 1–2             | Memory   |
+| FFT             | ~5              | Balanced |
+
+### Example
+
+```cpp
+__global__ void MatMul(float *A, float *B, float *C, size_t N, size_t M, size_t K) {
+    size_t row = blockIdx.y * blockDim.y + threadIdx.y;
+    size_t col = blockIdx.x * blockDim.x + threadIdx.x;
+
+    if (row >= M || col >= N) {
+      return;
+    }
+  
+    float sum = 0.0f;
+    for (size_t k = 0; k < K; ++k) {
+        sum += A[row * K + k] * B[k * N + col];  // 2 FLOPs (multiply + add)
+    }
+
+    C[row * N + col] = sum;
+}
+
+// Total FLOPs: (M * N) * K * 2
+```
+
+> 1:24:00
+
+The problem is, while having a lot more of compute, we have ~cache memory as in CPU.
+
+## Memory Types
+
+| Memory Type     | Scope       | Location             | Performance                 | Notes                                                                 |
+|-----------------|-------------|----------------------|-----------------------------|-----------------------------------------------------------------------|
+| **Registers**   | Per-thread  | On-chip              | Fastest                     | Used automatically for scalar vars.                |
+| **Local Memory**| Per-thread  | Off-chip (DRAM)      | Slow (≈ global memory)      | Despite the name, stored in DRAM; used when registers spill or for arrays. |
+| **Shared Memory**| Per-block  | On-chip (lives on L1) | Much faster than DRAM       | _Programmer-managed cache_; enables intra-block communication.           |
+| **Global Memory**| Per-grid   | Device DRAM          | Slowest (unless coalesced)  | Accessible to all threads and the host. |
+| **Constant Memory**| Per-grid | Device DRAM + cache  | Fast if broadcasted         | Read-only for device; cached. |
+
+Both shared memory and L1 cache are implemented in the same on-chip **SRAM**, partitioned between them.
+
+## Tiled Matrix Multiplication
+
+Check out Tiled Matrix Multiplication [implementation](tiling.cu).
+
+```cpp
+__shared__ float As[TILE][TILE];
+__shared__ float Bs[TILE][TILE];
+```
+
+![alt text](notes_images/tiling1.png)
+
+![alt text](notes_images/tiling2.png)
