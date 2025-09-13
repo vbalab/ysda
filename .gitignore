@@ -1,0 +1,26 @@
+# Ignore everything
+*
+
+# But not git config files
+!.gitignore
+!.gitattributes
+!.gitmodules
+
+# But not these file types
+!*.md
+!*.jpg
+!*.png
+!*.cpp
+!*.cu
+!*.sh
+!*.py
+!.clang-format
+!.clang-tidy
+!.clangd
+
+# Allow directories so Git can traverse into them
+!*/
+
+# Explicitly ignore some directories
+preparation/
+smeshnyavky/
