@@ -40,7 +40,7 @@ Define a trajectory:
 The probability of a trajectory under policy $ \pi $:
 
 $$
-p(\tau \mid \pi) = p(s_0) \prod_{t=0}^{\infty} \pi(a_t \mid s_t) \, p(s_{t+1} \mid s_t, a_t)
+p(\tau \mid \pi) = p(s_0) \prod_{t=0}^{\infty} \pi(a_t \mid s_t) p(s_{t+1} \mid s_t, a_t)
 $$
 
 > Agent that strives for the max total reward should do the task best.
@@ -208,12 +208,12 @@ $$
 
 - Instead of fully evaluating a policy, perform a Bellman optimality update directly on the value function:
     $$
-    V_{k+1}(s) \;\leftarrow\; \max_a \sum_{s',r} P(s',r \mid s,a)\,\big[ r + \gamma V_k(s') \big].
+    V_{k+1}(s) \;\leftarrow\; \max_a \sum_{s',r} P(s',r \mid s,a) \big[ r + \gamma V_k(s') \big].
     $$
 
 - After convergence, extract the greedy policy:
     $$
-    \pi^*(s) = \arg\max_a \sum_{s',r} P(s',r \mid s,a)\,[\,r + \gamma V^*(s')\,].
+    \pi^*(s) = \arg\max_a \sum_{s',r} P(s',r \mid s,a) [ r + \gamma V^*(s') ].
     $$
 
 - **Pros:** Usually converges faster than PI because it _avoids full evaluation_.
@@ -329,13 +329,13 @@ $\uparrow N$ $\to$ more noise and variance, but faster learning $\to$ great at b
 ### N-step SARSA
 
 $$
-\hat{Q}(s_t, a_t) = \left[ \sum_{\tau = t}^{\tau < t + n} \gamma^{\tau - t} \, r(s_{\tau}, a_{\tau}) \right] + \gamma^n Q(s_{t+n}, a_{t+n})
+\hat{Q}(s_t, a_t) = \left[ \sum_{\tau = t}^{\tau < t + n} \gamma^{\tau - t} r(s_{\tau}, a_{\tau}) \right] + \gamma^n Q(s_{t+n}, a_{t+n})
 $$
 
 ### N-step Q-learning
 
 $$
-\hat{Q}(s_t, a_t) = \left[ \sum_{\tau = t}^{\tau < t + n} \gamma^{\tau - t} \, r(s_{\tau}, a_{\tau}) \right] + \gamma^n \max_{a} Q(s_{t+n}, a)
+\hat{Q}(s_t, a_t) = \left[ \sum_{\tau = t}^{\tau < t + n} \gamma^{\tau - t} r(s_{\tau}, a_{\tau}) \right] + \gamma^n \max_{a} Q(s_{t+n}, a)
 $$
 
 # **YSDA Lecture 4 - Deep RL**
@@ -585,11 +585,11 @@ $$
 
 | Aspect                         | **C51 (Categorical DQN)**                                                                                                                                        | **QR-DQN (Quantile Regression DQN)**                                                                                                                                                                                                                          |
 | ------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **Representation of $Z(s,a)$** | $ Z_\theta(s,a) = \sum_{i=1}^N p_i(s,a)\,\delta_{z_i} $ where $\{z_i\}$ are **fixed atoms**, $p_i$ are softmax probabilities.                  | $ Z_\theta(s,a) = \frac{1}{N} \sum_{i=1}^N \delta_{\theta_i(s,a)}$ where $\theta_i(s,a)$ are **learned quantile values**, all equally weighted.                                                                                             |
+| **Representation of $Z(s,a)$** | $ Z_\theta(s,a) = \sum_{i=1}^N p_i(s,a) \delta_{z_i} $ where $\{z_i\}$ are **fixed atoms**, $p_i$ are softmax probabilities.                  | $ Z_\theta(s,a) = \frac{1}{N} \sum_{i=1}^N \delta_{\theta_i(s,a)}$ where $\theta_i(s,a)$ are **learned quantile values**, all equally weighted.                                                                                             |
 | **Atoms / Support**            | Fixed grid:$ z_i = V_{\min} + (i-1)\Delta z,\quad \Delta z = \frac{V_{\max}-V_{\min}}{N-1}$.                                                  | Learned per state-action: $\theta_i(s,a)$ directly parameterized by NN.                                                                                                                                                                                       |
 | **Probabilities**              | Learned: $p_i(s,a) = \mathrm{softmax}(h_\theta(s,a))$.                                                                                                           | Fixed: $1/N$ for each quantile.                                                                                                                                                                                                                               |
-| **Expectation recovery**       | $ Q(s,a) = \sum_{i=1}^N p_i(s,a)\,z_i.$                                                                                                             | $ Q(s,a) = \frac{1}{N} \sum_{i=1}^N \theta_i(s,a).$                                                                                                                                                                                              |
-| **Target distribution**        | $ r + \gamma Z(x', a^*), \quad a^* = \arg\max_{a'} \sum_i p_i(x',a')\,z_i.$                                                                         | $ y_j = r + \gamma \theta_j(x',a^*), \quad a^* = \arg\max_{a'} \frac{1}{N} \sum_{j=1}^N \theta_j(x',a').$                                                                                                                                        |
+| **Expectation recovery**       | $ Q(s,a) = \sum_{i=1}^N p_i(s,a) z_i.$                                                                                                             | $ Q(s,a) = \frac{1}{N} \sum_{i=1}^N \theta_i(s,a).$                                                                                                                                                                                              |
+| **Target distribution**        | $ r + \gamma Z(x', a^*), \quad a^* = \arg\max_{a'} \sum_i p_i(x',a') z_i.$                                                                         | $ y_j = r + \gamma \theta_j(x',a^*), \quad a^* = \arg\max_{a'} \frac{1}{N} \sum_{j=1}^N \theta_j(x',a').$                                                                                                                                        |
 | **Projection step**            | Required: project shifted atoms $r+\gamma z_i$ back to fixed support $\{z_i\}$.                                                                                  | Not required: quantiles move freely (no projection).                                                                                                                                                                                                          |
 | **Loss function**              | Cross-entropy (KL divergence) between predicted categorical dist. and projected target dist.| Quantile regression loss (pinball loss) |
 | **Hyperparameters**            | Need $V_{\min}, V_{\max}, N$.                                                                                                                                    | Only $N$ (number of quantiles).                                                                                                                                                                                                                               |
@@ -610,7 +610,7 @@ $$
 Trajectory $\tau = (s_0,a_0,s_1,a_1,\ldots)$ has **trajectory probability**:
 
 $$
-p_\theta(\tau) = \rho(s_0) \prod_{t=0}^\infty \pi_\theta(a_t|s_t)\, p(s_{t+1}|s_t,a_t)
+p_\theta(\tau) = \rho(s_0) \prod_{t=0}^\infty \pi_\theta(a_t|s_t)  p(s_{t+1}|s_t,a_t)
 $$
 
 where $\rho(s_0)$ is initial state distribution.  
@@ -620,7 +620,7 @@ where $\rho(s_0)$ is initial state distribution.
 When people write $\mathbb{E}_{\pi_\theta}$, it’s a **shorthand** that hides the fact that the trajectory distribution is $p_\theta(\tau)$, which depends both on:
 
 - policy $\pi_\theta$
-- environment dynamics $p(s' \mid s, a)$.
+- environment dynamics $p(s' \mid s, a)$
 
 So:
 
@@ -638,8 +638,8 @@ $$
 
 where:
 
-- $$ R(\tau) = \sum_{t=0}^\infty \gamma^t \, r(s_t, a_t) $$
-- $$ G_t = \sum_{i=t}^\infty \gamma^{\,i-t} \, r(s_i, a_i) $$
+- $$ R(\tau) = \sum_{t=0}^\infty \gamma^t r(s_t, a_t) $$
+- $$ G_t = \sum_{i=t}^\infty \gamma^{ i-t} r(s_i, a_i) $$
 - $$ V^{\pi}(s) = \mathbb{E}_{\pi} \!\left[ G_t \mid s_t = s \right] $$
 
 **Objective**:
@@ -653,7 +653,7 @@ $$
 We want to calculalte
 
 $$
-\nabla_\theta J(\theta) = \nabla_\theta \int p_\theta(\tau) R(\tau) \, d\tau.
+\nabla_\theta J(\theta) = \nabla_\theta \int p_\theta(\tau) R(\tau) d\tau.
 $$
 
 But, naively differentiating is problematic because $ p_\theta(\tau) $ depends on both
@@ -671,7 +671,7 @@ The trick:
   $$
 - To
   $$
-  \nabla_\theta p_\theta(\tau) = p_\theta(\tau) \, \nabla_\theta \log p_\theta(\tau)
+  \nabla_\theta p_\theta(\tau) = p_\theta(\tau) \nabla_\theta \log p_\theta(\tau)
   $$
 
 Now, observe that
@@ -694,15 +694,15 @@ $$
 \nabla_\theta J(\theta) =
 $$
 $$
-= \int \nabla_\theta p_\theta(\tau) R(\tau) \, d\tau =
+= \int \nabla_\theta p_\theta(\tau) R(\tau) d\tau =
 $$
 
 $$
-= \int p_\theta(\tau) \nabla_\theta \log p_\theta(\tau) R(\tau) \, d\tau =
+= \int p_\theta(\tau) \nabla_\theta \log p_\theta(\tau) R(\tau) d\tau =
 $$
 
 $$
-= \mathbb{E}_{\tau \sim p_\theta}\! \left[ R(\tau)\, \nabla_\theta \log p_\theta(\tau) \right] =
+= \mathbb{E}_{\tau \sim p_\theta}\! \left[ R(\tau)  \nabla_\theta \log p_\theta(\tau) \right] =
 $$
 
 $$
@@ -718,7 +718,7 @@ $$
 Since rewards before $t$ are independent of $a_t$, we can replace $R(\tau)$ with **return from $t$:**
 
 $$
-\nabla_\theta J(\theta) = \mathbb{E}_{\pi_\theta} \left[ \sum_{t=0}^\infty G_t \, \nabla_\theta \log \pi_\theta(a_t|s_t) \right]
+\nabla_\theta J(\theta) = \mathbb{E}_{\pi_\theta} \left[ \sum_{t=0}^\infty G_t \nabla_\theta \log \pi_\theta(a_t|s_t) \right]
 $$
 
 Keep in mind that $G_t = \sum_{i = t}^{\infin} \gamma^{i - t} r(s_i, a_i) = r(s_t, a_t) + \gamma G_{t+1}$.
@@ -729,20 +729,20 @@ The theorem states:
 
 $$
 \nabla_\theta J(\theta)
-= \mathbb{E}_{\pi_\theta} \left[ \sum_{t=0}^\infty \textcolor{blue}{\gamma^t} \, \nabla_\theta \log \pi_\theta(a_t \mid s_t)\, Q^{\pi_\theta}(s_t, a_t) \right]
+= \mathbb{E}_{\pi_\theta} \left[ \sum_{t=0}^\infty \textcolor{blue}{\gamma^t} \nabla_\theta \log \pi_\theta(a_t \mid s_t)  Q^{\pi_\theta}(s_t, a_t) \right]
 $$
 
 $$
 \nabla_\theta J(\theta)
-= \textcolor{gray}{\frac{1}{1-\gamma}} \, \mathbb{E}_{s \sim d^{\pi_\theta},\, a \sim \pi_\theta}
-\left[ \nabla_\theta \log \pi_\theta(a \mid s)\, Q^{\pi_\theta}(s,a) \right]
+= \textcolor{gray}{\frac{1}{1-\gamma}} \mathbb{E}_{s \sim d^{\pi_\theta},  a \sim \pi_\theta}
+\left[ \nabla_\theta \log \pi_\theta(a \mid s)  Q^{\pi_\theta}(s,a) \right]
 $$
 
 where:
 
-- $d^{\pi_\theta}(s) = (1 - \gamma) \sum_{t=0}^{\infty} \gamma^t \, P(s_t = s \mid \pi_\theta) $ - discounted state distribution under policy. $\sum_{s} d_{\pi}(s) = 1. $
+- $d^{\pi_\theta}(s) = (1 - \gamma) \sum_{t=0}^{\infty} \gamma^t P(s_t = s \mid \pi_\theta) $ - discounted state distribution under policy. $\sum_{s} d_{\pi}(s) = 1. $
 
-- $ Q^\pi(s_t, a_t) = \mathbb{E}_\pi \!\left[ G_t \mid s_t, a_t \right] = \mathbb{E}_\pi \!\left[ \sum_{i=t}^\infty \textcolor{blue}{\gamma^{\,i-t}} r(s_i, a_i) \;\middle|\; s_t, a_t \right] $ - expected return starting from state $s$, action $a$
+- $ Q^\pi(s_t, a_t) = \mathbb{E}_\pi \!\left[ G_t \mid s_t, a_t \right] = \mathbb{E}_\pi \!\left[ \sum_{i=t}^\infty \textcolor{blue}{\gamma^{ i-t}} r(s_i, a_i) \;\middle|\; s_t, a_t \right] $ - expected return starting from state $s$, action $a$
 
 ## REINFORCE (Williams, 1992)
 
@@ -771,13 +771,13 @@ The **baseline trick** is to subtract a function $ b(s_t) $ from $ G_t $ inside 
 
 $$
 \nabla_\theta J(\theta)
-= \mathbb{E}_{\pi_\theta}\!\Bigg[ \sum_{t=0}^\infty \nabla_\theta \log \pi_\theta(a_t \mid s_t)\, \big( G_t - b(s_t) \big) \Bigg].
+= \mathbb{E}_{\pi_\theta}\!\Bigg[ \sum_{t=0}^\infty \nabla_\theta \log \pi_\theta(a_t \mid s_t)  \big( G_t - b(s_t) \big) \Bigg].
 $$
 
 Because for $ \forall b(s_t) $ independent of $a_t$:
 
 $$
-\mathbb{E}_{a_t \sim \pi_\theta(\cdot|s_t)} \!\left[ \nabla_\theta \log \pi_\theta(a_t \mid s_t)\, b(s_t) \right] = 0.
+\mathbb{E}_{a_t \sim \pi_\theta(\cdot|s_t)} \!\left[ \nabla_\theta \log \pi_\theta(a_t \mid s_t)  b(s_t) \right] = 0.
 $$
 
 $\to$ still unbiased! But it can **reduce variance**.
@@ -814,7 +814,7 @@ Policy Gradient with Advantage:
 
 $$
 \nabla_\theta J(\theta)
-= \mathbb{E}_{\pi_\theta}\!\Big[ \nabla_\theta \log \pi_\theta(a_t \mid s_t) \, A^\pi(s_t,a_t) \Big].
+= \mathbb{E}_{\pi_\theta}\!\Big[ \nabla_\theta \log \pi_\theta(a_t \mid s_t) A^\pi(s_t,a_t) \Big].
 $$
 
 The **advantage** can be estimated in several ways:
@@ -850,11 +850,11 @@ At each step:
    $$
 3. Update **actor** with gradient ascent:  
    $$
-   \theta \leftarrow \theta + \alpha \, \nabla_\theta J(\theta) .
+   \theta \leftarrow \theta + \alpha \nabla_\theta J(\theta) .
    $$
 4. Update **critic** with gradient descent on TD loss:  
    $$
-   \phi \leftarrow \phi - \beta \, \nabla_\phi L(\phi).
+   \phi \leftarrow \phi - \beta \nabla_\phi L(\phi).
    $$
 
 ### Asynchronous Advantage Actor-Critic (A3C)
@@ -879,7 +879,7 @@ REINFORCE, A2C, A3C — **on-policy** $\to$ **sample-inefficient** — you can�
 We often want to compute:
 
 $$
-\mathbb{E}_{x \sim p}[f(x)] = \int f(x)\, p(x)\, dx.
+\mathbb{E}_{x \sim p}[f(x)] = \int f(x)  p(x)  dx.
 $$
 
 But:
@@ -893,9 +893,9 @@ Rewrite the expectation:
 
 $$
 \mathbb{E}_{x \sim p}[f(x)]
-= \int f(x) \, p(x)\, dx
-= \int f(x) \, \frac{p(x)}{q(x)} \, q(x)\, dx
-= \mathbb{E}_{x \sim q}\left[f(x) \, \frac{p(x)}{q(x)}\right]
+= \int f(x) p(x)  dx
+= \int f(x) \frac{p(x)}{q(x)} q(x)  dx
+= \mathbb{E}_{x \sim q}\left[f(x) \frac{p(x)}{q(x)}\right]
 $$
 
 ### III. Monte Carlo Estimate
@@ -904,8 +904,8 @@ With samples $ x_1, \dots, x_N \sim q(x) $:
 
 $$
 \mathbb{E}_{x \sim p}[f(x)]
-= \mathbb{E}_{x \sim q}\left[f(x) \, \frac{p(x)}{q(x)}\right]
-\approx \frac{1}{N} \sum_{i=0}^N f(x_i) \, \frac{p(x_i)}{q(x_i)}.
+= \mathbb{E}_{x \sim q}\left[f(x) \frac{p(x)}{q(x)}\right]
+\approx \frac{1}{N} \sum_{i=0}^N f(x_i) \frac{p(x_i)}{q(x_i)}.
 $$
 
 Thus, we "reweight" samples from $q$ so that they mimic samples from $p$.
@@ -1003,7 +1003,7 @@ $$
 $$
 
 $$
-= \sum_t \mathbb{E}_{s_t \sim p_{\theta'}} \!\left[ \mathbb{E}_{a_t \sim \pi_{\textcolor{red}{\theta}(\cdot|s_t)}} \!\left[ \frac{\pi_{\theta'}(a_t|s_t)}{\pi_\theta(a_t|s_t)} \, \gamma^t A^{\pi_\theta}(s_t, a_t) \right] \right].
+= \sum_t \mathbb{E}_{s_t \sim p_{\theta'}} \!\left[ \mathbb{E}_{a_t \sim \pi_{\textcolor{red}{\theta}(\cdot|s_t)}} \!\left[ \frac{\pi_{\theta'}(a_t|s_t)}{\pi_\theta(a_t|s_t)} \gamma^t A^{\pi_\theta}(s_t, a_t) \right] \right].
 $$
 
 Now for actions $a_t$ $\to$ we don't have to sample!  
@@ -1030,8 +1030,8 @@ Don’t try to fix it directly (too high variance), instead approximate it under
 This yields the **surrogate objective** which approximates $J(\theta') - J(\theta)$ :
 
 $$
-L(\theta') = \sum_t \mathbb{E}_{s_t \sim p_\theta, \, a_t \sim \pi_\theta}
-\left[ \frac{\pi_{\theta'}(a_t \mid s_t)}{\pi_\theta(a_t \mid s_t)} \, A^{\pi_\theta}(s_t, a_t) \right]
+L(\theta') = \sum_t \mathbb{E}_{s_t \sim p_\theta, a_t \sim \pi_\theta}
+\left[ \frac{\pi_{\theta'}(a_t \mid s_t)}{\pi_\theta(a_t \mid s_t)} A^{\pi_\theta}(s_t, a_t) \right]
 $$
 
 _In practice_, we often simplify:
@@ -1039,7 +1039,7 @@ _In practice_, we often simplify:
 $$
 L(\theta')
 = \mathbb{E}_{t}\!\left[
-\frac{\pi_{\theta'}(a_t \mid s_t)}{\pi_\theta(a_t \mid s_t)} \, A^{\pi_\theta}(s_t,a_t)
+\frac{\pi_{\theta'}(a_t \mid s_t)}{\pi_\theta(a_t \mid s_t)} A^{\pi_\theta}(s_t,a_t)
 \right]
 $$
 
@@ -1059,34 +1059,34 @@ This task is hard to solve, so we have **TRPO** & **PPO**.
 
 ### KL Divergence
 
-$D_{\text{KL}}(P \,\|\, Q)$ measures how different distribution $Q$  is from distribution $P$.
+$D_{\text{KL}}(P  \|  Q)$ measures how different distribution $Q$  is from distribution $P$.
 
 For two probability distributions $P$ and Q over the same space $ \mathcal{X} $:
 
 $$
-D_{\text{KL}}(P \,\|\, Q) = \sum_{x \in \mathcal{X}} P(x) \log \frac{P(x)}{Q(x)}
+D_{\text{KL}}(P  \|  Q) = \sum_{x \in \mathcal{X}} P(x) \log \frac{P(x)}{Q(x)}
 \quad \text{(discrete)}
 $$
 
 $$
-D_{\text{KL}}(P \,\|\, Q) = \int_{\mathcal{X}} P(x) \log \frac{P(x)}{Q(x)} \, dx
+D_{\text{KL}}(P  \|  Q) = \int_{\mathcal{X}} P(x) \log \frac{P(x)}{Q(x)} dx
 \quad \text{(continuous)}
 $$
 
-- If $P = Q$, then $D_{\text{KL}}(P \,\|\, Q) = 0$.
+- If $P = Q$, then $D_{\text{KL}}(P  \|  Q) = 0$.
 
 Good **property** of KL divergence is that:
 
 $$
 \big| \pi_{\theta'}(a_t \mid s_t) - \pi_\theta(a_t \mid s_t) \big|
 \;\le\;
-\sqrt{ \tfrac{1}{2} \, D_{\mathrm{KL}}\!\left(\pi_{\theta'}(a_t \mid s_t)\,\|\,\pi_\theta(a_t \mid s_t)\right) }
+\sqrt{ \tfrac{1}{2} D_{\mathrm{KL}}\!\left(\pi_{\theta'}(a_t \mid s_t) \| \pi_\theta(a_t \mid s_t)\right) }
 $$
 
 ### TRPO Task
 
 $$
-\max_{\theta'} L(\theta') \quad \text{s.t.} \quad \mathbb{E}_{s_t \sim p_\theta} \left[ D_{\mathrm{KL}}\!\left(\pi_{\theta'}(\cdot \mid s_t)\,\|\,\pi_\theta(\cdot \mid s_t)\right) \right] \le \delta
+\max_{\theta'} L(\theta') \quad \text{s.t.} \quad \mathbb{E}_{s_t \sim p_\theta} \left[ D_{\mathrm{KL}}\!\left(\pi_{\theta'}(\cdot \mid s_t) \| \pi_\theta(\cdot \mid s_t)\right) \right] \le \delta
 $$
 
 KL divergence is easier to approximate!
@@ -1098,8 +1098,8 @@ KL divergence is easier to approximate!
 Around the old params $\theta$, approximate the expected KL by a quadratic form:
 
 $$
-\mathbb{E}_{s \sim p_\theta}\!\big[D_{\mathrm{KL}}(\pi_\theta \,\|\, \pi_{\theta+\Delta\theta})\big]
-\;\approx\; \tfrac{1}{2}\,\Delta\theta^\top F \Delta\theta,
+\mathbb{E}_{s \sim p_\theta}\!\big[D_{\mathrm{KL}}(\pi_\theta  \|  \pi_{\theta+\Delta\theta})\big]
+\;\approx\; \tfrac{1}{2} \Delta\theta^\top F \Delta\theta,
 $$
 
 where $F$ is the **Fisher information** (under $\pi_\theta$).
@@ -1158,7 +1158,7 @@ L^{\text{CLIP}}(\theta')
 = \mathbb{E}_t \!\left[
 \min \Big(
    (\rho_t(\theta') A_t,\;
-   \operatorname{clip}(\rho_t(\theta'), 1-\epsilon, 1+\epsilon)\, A_t
+   \operatorname{clip}(\rho_t(\theta'), 1-\epsilon, 1+\epsilon)  A_t
 \Big)
 \right].
 $$
@@ -1172,7 +1172,7 @@ It ensures the update is conservative, but much _cheaper_ than TRPO.
 You can add regularization on policy change:
 
 $$
-L^{\text{CLIP}}(\theta') + Const \cdot D_{\mathrm{KL}}\!\left(\pi_{\theta'}(\cdot \mid s_t)\,\|\,\pi_\theta(\cdot \mid s_t)\right) \to \max_{\theta'}
+L^{\text{CLIP}}(\theta') + Const \cdot D_{\mathrm{KL}}\!\left(\pi_{\theta'}(\cdot \mid s_t) \| \pi_\theta(\cdot \mid s_t)\right) \to \max_{\theta'}
 $$
 
 ### Training
@@ -1183,13 +1183,111 @@ When training do multiple epochs of PPO before moving to sampling by new $\theta
 
 # **YSDA Lecture 8 - RL for seq2seq**
 
-## Self-Critical Sequence Training
+## SCST (Self-Critical Sequence Training)
+
+> **SCST** = REINFORCE + self-critical baseline, optimizes metrics
+
+#### Problem
+
+In seq2seq (e.g. machine translation, summarization, dialogue), training is usually done via **MLE**:
+  $$
+  \max_\theta \; \sum_t \log \pi_\theta(y_t \mid y_{<t}, x).
+  $$
+  But MLE suffers from:
+
+- **Exposure bias** (train on gold tokens, test on self-generated).
+- **Mismatch with task metrics** (BLEU, ROUGE not optimized directly).
+
+#### Solution
+
+Treat sequence generation as **RL**, with reward = task metric.
+
+### Objective
+
+For generated sequence $y_{1:T}$:
+
+$$
+J(\theta) = \mathbb{E}_{y_{1:T} \sim \pi_\theta} \left[ R(y_{1:T}) \right].
+$$
+
+Gradient (REINFORCE):
+
+$$
+\nabla_\theta J(\theta)
+= \mathbb{E}_{y_{1:T} \sim \pi_\theta} \left[ (R(y_{1:T}) - b) \; \nabla_\theta \log \pi_\theta(y_{1:T}) \right],
+$$
+
+where $b$ - baseline to reduce variance.
+
+### Self-Critical Baseline
+
+- Use the **model’s greedy decoding reward** as baseline:
+  $$
+  b = R(\hat{y}_{1:T}), \quad \hat{y}_{1:T} = \arg\max \pi_\theta.
+  $$
+- Gradient estimate:
+  $$
+  \nabla_\theta J(\theta) \;\approx\; (R(y_{1:T}) - R(\hat{y}_{1:T})) \; \nabla_\theta \log \pi_\theta(y_{1:T}).
+  $$
+
+$\to$ If sampled sequence better than greedy $\to$ push up; else $\to$ push down.  
+
+This stabilizes training and directly optimizes task metric.
 
 ## Reward Model
 
+Human preference data (e.g. which summary is better) $\to$ train a **reward model** $r_\phi(x,y)$.
+
+### Training Reward Model
+
+Given pair $(y^+, y^-)$ for same input $x$:
+
+- Preference loss:
+  $$
+  \mathcal{L}(\phi)
+  = - \log \sigma\!\big(r_\phi(x, y^+) - r_\phi(x, y^-)\big).
+  $$
+
+This encourages $r_\phi(x,y^+) > r_\phi(x,y^-)$.
+
 ## PPO-ptx
 
+**PPO-ptx** (used in RLHF, e.g. ChatGPT training) - PPO adapted for text generation, with:
+
+- reward model instead of env reward
+- KL regularization to keep outputs human-like
+- sequence-level reward attribution
+
 ## DPO (Direct Preference Optimization)
+
+> **DPO** - avoids RL, directly optimizes preference pairs, simpler + efficient.
+
+- PPO-ptx requires RL machinery (rewards, value networks).  
+
+- Can we skip RL and do **direct supervised** training on preference pairs?
+
+### Idea
+
+- Start from KL-regularized RLHF objective:
+  $$
+  \max_\pi \; \mathbb{E}_{y^+ \succ y^-}\!\left[ \log \frac{\pi(y^+ \mid x)}{\pi(y^- \mid x)} \right]
+  - \beta \, D_{\text{KL}}(\pi \,\|\, \pi_{\text{ref}}).
+  $$
+
+- DPO shows this can be rewritten as **classification over preferences**.
+
+### DPO Loss
+
+For pair $(y^+, y^-)$:
+
+$$
+\mathcal{L}_{\text{DPO}}(\theta)
+= - \log \sigma\!\left( \beta \log \frac{\pi_\theta(y^+ \mid x)}{\pi_{\text{ref}}(y^+ \mid x)}
+- \beta \log \frac{\pi_\theta(y^- \mid x)}{\pi_{\text{ref}}(y^- \mid x)} \right).
+$$
+
+- $\pi_{\text{ref}}$ = frozen reference model (e.g. pretrained LM).
+- $\beta$ controls tradeoff between alignment vs staying close to reference.
 
 # **YSDA Lecture 8 - Bias-Variance Tradeoff**
 
@@ -1200,7 +1298,7 @@ When training do multiple epochs of PPO before moving to sampling by new $\theta
 - For Actor
 
   $$
-  \nabla := \rho(\theta)\nabla_\theta \log \pi_\theta(a_t \mid s_t)\,\Psi(s_t,a_t)
+  \nabla := \rho(\theta)\nabla_\theta \log \pi_\theta(a_t \mid s_t) \Psi(s_t,a_t)
   $$
 
   - $\Psi(s_t,a_t)$ – advantage estimator  
@@ -1331,7 +1429,7 @@ $$
 The gradient becomes **Deterministic Policy Gradient**:
 
 $$
-\nabla_\theta J(\theta) = \mathbb{E}_{s \sim \rho^\mu} \Big[ \nabla_\theta \pi(s, \theta)\, \nabla_a Q^\pi(s,a) \big|_{a=\pi(s, \theta)} \Big].
+\nabla_\theta J(\theta) = \mathbb{E}_{s \sim \rho^\mu} \Big[ \nabla_\theta \pi(s, \theta)  \nabla_a Q^\pi(s,a) \big|_{a=\pi(s, \theta)} \Big].
 $$
 
 - **Key difference:** No log-derivative. We backpropagate through the critic ($Q$) w.r.t. action.
@@ -1367,7 +1465,7 @@ Policies may **collapse** to deterministic behaviors too early, leading to poor 
 We augment the return with an **entropy bonus**:
 
 $$
-J(\pi) \;=\; \mathbb{E}_\pi\!\Big[ \sum_{t=0}^\infty \gamma^t \,\big( r(s_t,a_t) \;+\; \alpha \,\mathcal H(\pi(\cdot|s_t)) \big) \Big],
+J(\pi) \;=\; \mathbb{E}_\pi\!\Big[ \sum_{t=0}^\infty \gamma^t  \big( r(s_t,a_t) \;+\; \alpha  \mathcal H(\pi(\cdot|s_t)) \big) \Big],
 $$
 
 $$
@@ -1383,7 +1481,7 @@ Entropy modifies the Bellman equations:
 - **Soft Q-function**
 
 $$
-Q^\pi(s,a) \;=\; r(s,a) + \gamma \,\mathbb E_{s'\sim P}\!\big[ V^\pi(s') \big].
+Q^\pi(s,a) \;=\; r(s,a) + \gamma  \mathbb E_{s'\sim P}\!\big[ V^\pi(s') \big].
 $$
 
 - **Soft Value Function**
@@ -1399,7 +1497,7 @@ For fixed $Q$, the entropy-regularized optimal policy is **Boltzmann** over acti
 $$
 \pi^*(a|s) \;=\; \frac{\exp\!\Big(\tfrac{1}{\alpha} Q^*(s,a)\Big)}{Z(s)},
 \quad
-Z(s) \;=\; \int_{\mathcal A} \exp\!\Big(\tfrac{1}{\alpha} Q^*(s,\tilde a)\Big)\, d\tilde a.
+Z(s) \;=\; \int_{\mathcal A} \exp\!\Big(\tfrac{1}{\alpha} Q^*(s,\tilde a)\Big)  d\tilde a.
 $$
 
 ## SAC
@@ -1415,13 +1513,13 @@ $$
 
 $$
 \mathcal L_{\text{critic}}(\phi_i) \;=\; \mathbb E_{(s,a,r,s')\sim \mathcal D}
-\big[\, \big(Q_{\phi_i}(s,a) - y_Q\big)^2 \,\big], \quad i\in\{1,2\}.
+\big[  \big(Q_{\phi_i}(s,a) - y_Q\big)^2  \big], \quad i\in\{1,2\}.
 $$
 
 ### (b) Actor (KL projection / reparameterization)
 
 $$
-\mathcal L_{\text{actor}}(\theta) \;=\; \mathbb E_{s\sim \mathcal D,\, a\sim \pi_\theta(\cdot|s)}
+\mathcal L_{\text{actor}}(\theta) \;=\; \mathbb E_{s\sim \mathcal D,  a\sim \pi_\theta(\cdot|s)}
 \big[ \alpha \log \pi_\theta(a|s) \;-\; Q_{\bar\phi}(s,a) \big],
 $$
 
@@ -1442,7 +1540,7 @@ $$
 Target entropy $\bar{\mathcal H}$ (e.g., $-|\mathcal A|$ for $|\mathcal A|$-dim Gaussian):
 $$
 \mathcal L(\alpha)
-= \mathbb E_{s\sim \mathcal D,\, a\sim \pi_\theta(\cdot|s)}
+= \mathbb E_{s\sim \mathcal D,  a\sim \pi_\theta(\cdot|s)}
 \big[ -\alpha \big( \log \pi_\theta(a|s) + \bar{\mathcal H} \big) \big],
 $$
 update $\alpha$ by gradient descent to match $\mathbb E[-\log \pi_\theta(a|s)] \approx \bar{\mathcal H}$.
@@ -1457,7 +1555,356 @@ update $\alpha$ by gradient descent to match $\mathbb E[-\log \pi_\theta(a|s)] \
 
 > Prefer SAC - easier to implement & hyperparametrize.
 
-# **YSDA Lecture 10 - a**
+# **YSDA Lecture 10 - Exploration in Multi-Armed Bandits**
+
+## Bandit Setup
+
+We have a **stochastic multi-armed bandit** with $K$ arms.  
+
+- Arm $i$ produces i.i.d. rewards $X_{i,1}, X_{i,2}, \dots \sim \nu_i$, with expectation $\mu_i = \mathbb{E}[X_{i,t}]$.  
+- The best arm is $i^*= \arg\max_i \mu_i$, with mean $\mu^* = \max_i \mu_i$.  
+
+At each round $t = 1, \dots, T$:
+
+- Algorithm chooses arm $a_t$.  
+- Observes reward $r_t \sim \nu_{a_t}$.  
+
+**Regret definition**:  
+
+$$
+R(T) = T \mu^* - \mathbb{E}\!\left[\sum_{t=1}^T r_t \right]
+= \sum_{i=1}^K \Delta_i \mathbb{E}[n_i(T)] \to \min_{\{a_t\}}
+$$
+
+where:  
+
+- $ \Delta_i = \mu^* - \mu_i $ is the suboptimality gap of arm $i$,  
+- $ n_i(T) $ is the number of times arm $i$ was played up to $T$.
+
+## Optimism in Face of Uncertainty
+
+Suppose after $n_i(t)$ plays of arm $i$, we have an empirical mean $\hat{\mu}_i(t)$.  
+
+We then construct confidence interval:  
+
+$$
+\mu_i \in \big[ \hat{\mu}_i(t) - b_i(t), \; \hat{\mu}_i(t) + b_i(t) \big].
+$$
+
+The algorithm picks arm maximizing the optimistic estimate:  
+
+$$
+a_t = \arg\max_i \Big( \hat{\mu}_i(t) + b_i(t) \Big).
+$$
+
+> Uncertain arms look artificially better, so they are tried until uncertainty shrinks.
+
+## Hoeffding's Inequality
+
+Let $X_1, \dots, X_n \in [0,1]$, i.i.d. with mean $\mu$.  
+
+Then, for empirical mean $\hat{\mu}_n$:  
+
+$$
+\Pr\!\big( \hat{\mu}_n - \mu \geq \epsilon \big) \leq \exp(-2n\epsilon^2)
+$$
+
+Set RHS equal to $\delta$:
+
+$$
+2e^{-2n\epsilon^2} = \delta
+\;\;\;\Rightarrow\;\;\;
+\epsilon = \sqrt{\tfrac{1}{2n}\ln \tfrac{2}{\delta}}.
+$$
+
+Thus with probability at least $1-\delta$:  
+
+$$
+|\hat{\mu}_n - \mu| \leq \sqrt{\frac{\ln(2/\delta)}{2n}}.
+$$
+
+This gives us the confidence radius $b_i(t)$.  
+
+## UCB
+
+> Frequentist, confidence intervals
+
+The **UCB1** algorithm (Auer et al., 2002):
+
+At round $t$, for each arm $i$, compute:
+
+$$
+\text{UCB}_i(t) = \hat{\mu}_i(t) + \sqrt{ \frac{2 \ln t}{n_i(t)} }.
+$$
+
+Choose:
+
+$$
+a_t = \arg\max_i \text{UCB}_i(t).
+$$
+
+UCB achieves **logarithmic regret**.
+
+## Thompson Sampling
+
+> Bayesian, posterior updates
+
+- Assume a prior distribution over arm means $\mu_i$.  
+- After observing data (rewards), update posterior using Bayes’ rule.  
+- At each round $t$:
+  - Sample $\tilde{\mu}_i(t) \sim \text{Posterior}(\mu_i)$.  
+  - Play arm with maximum sampled value:  
+    $$
+    a_t = \arg\max_i \tilde{\mu}_i(t).
+    $$
+
+### Example: Bernoulli Bandit
+
+- Reward: $r \in \{0,1\}$.  
+- Prior: $\mu_i \sim \text{Beta}(\alpha_i, \beta_i)$.  
+- After $s_i$ successes and $f_i$ failures:  
+
+$$
+\mu_i \mid \text{data} \sim \text{Beta}(\alpha_i+s_i, \; \beta_i+f_i).
+$$
+
+- Sampling step:  
+
+$$
+\tilde{\mu}_i \sim \text{Beta}(\alpha_i+s_i, \; \beta_i+f_i).
+$$
+
+# **YSDA Lecture 11 - Curiosity/Novelty-driven Exploration**
+
+In sparse reward environments, the agent rarely sees positive feedback $\to$ hard to explore.
+
+**Intrinsic reward** - out of environment (task) reward, that encourages visiting **novel states**.
+
+## Curiosity-driven Methods
+
+### Naive Curiosity (Forward Dynamics)
+
+Train a **forward dynamics model**:
+  $$
+  F_\theta(s_t, a_t) \approx s_{t+1}.
+  $$
+
+**Intrinsic reward**:
+  $$
+  r^{\text{int}}_t = \| F_\theta(s_t, a_t) - s_{t+1} \|^2.
+  $$
+
+#### Problems
+
+1. If $s_{t+1}$ is random ([TV noise problem :)](https://www.youtube.com/watch?v=l1FqtAHfJLI)), prediction always hard → agent chases noise.
+
+2. **High dimensional states** (e.g. raw pixels) $\to$ learning unstable.
+
+3. Learns *all* variation, even uncontrollable factors (like background view) $\to$ waste of capacity.
+
+### IDM (Inverse Dynamics Model)
+
+- Learn latent representation $\phi(s)$ focusing on **controllable aspects** useful for predicting actions.
+
+- Train **inverse model**:
+  $$
+  \hat{a}_t = I_\psi(\phi(s_t), \phi(s_{t+1})),
+  $$
+  predicting $a_t$ given $(s_t, s_{t+1})$.
+
+### ICM (Intrinsic Curiosity Model)
+
+![alt text](notes_images/icm.png)
+
+#### Architecture
+
+- Encoder: $\phi(s)$.
+
+- Two heads:
+  1. **Inverse model**: predict $a_t$ from $(\phi(s_t), \phi(s_{t+1}))$.
+  2. **Forward model**: predict $\phi(s_{t+1})$ from $(\phi(s_t), a_t)$.
+
+#### Loss
+
+- Inverse loss:
+  $$
+  \mathcal{L}_{\text{inv}} = \mathbb{E}\!\left[-\log P(a_t \mid \phi(s_t), \phi(s_{t+1}))\right].
+  $$
+- Forward loss:
+  $$
+  \mathcal{L}_{\text{fwd}} = \| F_\theta(\phi(s_t), a_t) - \phi(s_{t+1}) \|^2.
+  $$
+- Combined:
+  $$
+  \mathcal{L} = (1-\lambda)\mathcal{L}_{\text{inv}} + \lambda \mathcal{L}_{\text{fwd}}.
+  $$
+
+#### Intrinsic Reward
+
+$$
+r^{\text{int}}_t = \| F_\theta(\phi(s_t), a_t) - \phi(s_{t+1}) \|^2.
+$$
+
+## Novelty-driven Methods
+
+### Random Network Distillation
+
+💡 Instead of predicting dynamics, predict the output of a **random fixed network**.
+
+#### Setup
+
+- Fix a **target network** $f_{\text{target}}(s)$ with _random weights, never trained_.
+
+- Train a **predictor network** $f_\theta(s)$ to approximate $f_{\text{target}}(s)$.
+
+**Intrinsic reward**:
+
+$$
+r^{\text{int}}(s_t) = \| f_\theta(s_t) - f_{\text{target}}(s_t) \|^2.
+$$
+
+- If $s_t$ is **new**, predictor hasn’t learned it yet $\to$ large error $\to$ large reward.
+- If $s_t$ is **familiar**, predictor fits it well $\to$ small reward.
+
+# **YSDA Lecture 12 - Model-Based RL**
+
+$$
+p_\theta(\tau) = \rho(s_0) \prod_{t=0}^\infty \pi_\theta(a_t|s_t) \mathbf{p(s_{t+1}\mid s_t,a_t)}
+$$
+
+Now we want to learn (if not already known) environment dynamics $p(s' \mid s, a)$ to **plan** ahead.
+
+## Open/Closed Loop
+
+### Open-loop Planning
+
+- Plans an **action sequence** $(a_1, a_2, \dots, a_H)$ for horizon $H$ upfront
+- No adaptation mid-execution
+
+$$
+a_1, a_2, \dots, a_H  = \argmax_{a_1, a_2, \dots, a_H} \ \mathbb E\!\left[ \sum_{t=0}^{H-1} \gamma^t R(s_t,a_t) + \gamma^H V_{\text{term}}(s_H) \ \bigg|\ s_{t+1}\sim p(\cdot\mid s_t,a_t) \right].
+$$
+
+### Closed-loop Planning
+
+- Plans a **policy** $\pi$
+- Takes into account future states as they are observed
+
+$$
+\pi^* = \argmax_\pi \ \mathbb{E}_{\tau \sim p_\pi(\tau)}\left[ \sum_{t=0}^\infty \gamma^t R(s_t,a_t) \right],
+\quad a_t \sim \pi(\cdot\mid s_t), \ s_{t+1}\sim p(\cdot\mid s_t,a_t).
+$$
+
+## MCTS (Monte-Carlo Tree Search)
+
+![alt text](notes_images/mcts.png)
+
+### 1) Problem setup
+
+We want the **optimal action at the root state** $s_\circ$ that maximizes expected discounted return:
+
+$$
+a^*(s_\circ) \in \arg\max_{a\in\mathcal A(s_\circ)} Q^*(s_\circ,a)
+$$
+
+MCTS builds a **partial lookahead tree** $\mathcal T$ rooted at $s_\circ$ by repeated **simulations** (a.k.a. playouts). Each simulation consists of:
+
+1. **Selection** down the current tree to a leaf $s_L$ using a **tree policy** (UCB-style).
+2. **Expansion** (if $s_L$ nonterminal and expandable): add child(ren).
+3. **Evaluation / Rollout** from the leaf (either a default policy rollout or a learned value $V$).
+4. **Backpropagation**: update visit counts and value estimates along the selected path.
+
+### 2) Node statistics and notation
+
+For each edge $(s,a)$ in the built tree, MCTS maintains:
+
+- $N(s)$: visit count of node $s$.
+- $N(s,a)$: visit count of edge $(s,a)$.
+- $\widehat Q(s,a)$: empirical mean return when choosing $a$ at $s$.
+- Optional: **policy prior** $P_\phi(a\mid s)$ and **value prior** $V_\psi(s)$.
+
+### 3) Selection: from bandits to trees
+
+#### 3.1 UCT (UCB1 applied to trees)
+
+$$
+a \in \arg\max_{a\in\mathcal A(s)}
+\left[
+Q(s,a) + c \sqrt{\frac{\ln\!\big(N(s)\big)}{N(s,a)}}
+\right].
+$$
+
+#### 3.2 PUCT (policy-guided UCT)
+
+- We have a **prior policy** $\pi_\theta(a\mid s)$.
+
+$$
+a \in \arg\max_{a}
+\Big[
+Q(s,a) + c \, \pi_\theta(a\mid s) \frac{\sqrt{N(s)}}{1+N(s,a)}
+\Big].
+$$
+
+### 4) Expansion
+
+- Expand when a leaf $s_L$ is first reached (or when its visit count passes a threshold).
+
+- Use **progressive widening** with _large/continuous_ action spaces.
+
+### 5) Leaf evaluation: rollout vs bootstrap
+
+1. **Rollout (simulation)** with a default policy $\pi_{\text{ro}}$:
+
+    $$
+    \hat{V}(s_L) = \sum_{k=0}^{H-1}\gamma^k r_{L+k} + \gamma^H V_{\text{term}}(s_{L+H}).
+    $$
+
+2. **Bootstrap (value network)**:
+
+    $$
+    V_\psi(s_L).
+    $$
+
+3. **Hybrid**:
+
+    $$
+    V(s_L)=\lambda V_\psi(s_L) + (1 - \lambda) \hat{V}(s_L).
+    $$
+
+### 6) Backpropagation operators
+
+Let the selected path be $(s_0,a_0,r_0,s_1,a_1,r_1,\dots,s_L)$. Define a **backup target** at step $i$:
+$$
+G_i = r_i + \gamma G_{i+1}.
+$$
+
+Then update incremental means:
+$$
+N(s_i)\leftarrow N(s_i)+1,\quad
+N(s_i,a_i)\leftarrow N(s_i,a_i)+1,
+$$
+$$
+\widehat Q(s_i,a_i)\leftarrow
+\widehat Q(s_i,a_i) + \frac{G_i - \widehat Q(s_i,a_i)}{N(s_i,a_i)}.
+$$
+
+## Minimax
+
+We model games like Go/Chess/Shogi as a discounted (or episodic) **zero-sum Markov game**  
+$\mathcal G=(\mathcal S,\mathcal A_1,\mathcal A_2,P,R,\gamma)$ with alternating turns.
+
+- At state $s_t$, the current player $p_t\in\{+1,-1\}$ chooses $a_t\in\mathcal A(s_t)$.
+
+- Transition: $s_{t+1}\sim P(\cdot\mid s_t,a_t)$, reward $r_t\in[-1,1]$ to **Player +1** and $-r_t$ to **Player −1**.
+
+- Final outcome $z\in\{-1,0,1\}$ (loss/draw/win) is common in practice ($\gamma=1$, terminal reward only).
+
+**Minimax value**:
+$$
+V^*(s) \;=\; \max_{\pi_1}\min_{\pi_2}\; \mathbb E\!\left[\sum_{t=0}^{\infty}\gamma^t r_t \,\middle|\, s_0=s \right].
+$$
+
+With alternating turns, minimax can be written as max/min over the player-to-move at each depth.
 
 > # **Other Lectures**
 

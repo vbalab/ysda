@@ -1,6 +1,6 @@
-<!-- markdownlint-disable MD001, MD024, MD025 -->
+<!-- markdownlint-disable MD024 MD025 -->
 
-# Lecture 1 - Intro
+# **Lecture 1 - Intro**
 
 ## Missing Data
 
@@ -25,7 +25,7 @@
 
     - Cannot be dropped!!!
 
-# Lecture 2 - OLS
+# **Lecture 2 - OLS**
 
 ## [Bias-Variance Decomposition](https://en.wikipedia.org/wiki/Bias%E2%80%93variance_tradeoff)
 
@@ -124,7 +124,11 @@ $$
 
 $$\lambda ||\theta||^1$$
 
--//-
+1. -//-
+
+2. -//-
+
+3. -//-
 
 4. For unrelevant $x^d$: $\hat{\theta}_{Lasso}^d = 0$ (ромбик):  
     Линии уровная $L(\theta)$ будут касаться ромбика более вероятно в уголках ромбика, там, где $\theta_{Lasso}^d=0$ для каких-то $d$.
@@ -139,11 +143,11 @@ Very much as Ridge, but seems to be better.
 
 ![Elastic](notes_images/elastic.png)
 
-# Lecture 3 - Maximum Likelihood, Logit
+# **Lecture 3 - Maximum Likelihood, Logit**
 
 proebav
 
-# Lecture 4 - Сonfidence Intervals
+# **Lecture 4 - Сonfidence Intervals**
 
 ## Definitions
 
@@ -201,15 +205,15 @@ $$
 \hat{\beta}_j \pm t_{\alpha/2, n-k} \cdot \widehat{\text{SE}}(\hat{\beta}_j)
 $$
 
-# Lecture 5 - Bayesian Methods
+# **Lecture 5 - Bayesian Methods**
 
 proebav
 
-# Lecture 6 - Dimensionality Reduction Methods
+# **Lecture 6 - Dimensionality Reduction Methods**
 
 proebav
 
-# Lecture 7 - Decision Trees
+# **Lecture 7 - Decision Trees**
 
 ## Splitting (Impurity) Criterion
 
@@ -344,7 +348,7 @@ Cons:
 
 ## Precision, Recall, PR-curve
 
-# Lecture 8 - Random Forest
+# **Lecture 8 - Random Forest**
 
 **Random Forest** = (Bagging + RSM) on Decision Trees
 
@@ -431,7 +435,7 @@ Recommended Subset Sizes in RSM:
 RSM not only on features, but on the splits of each feature.  
 So each feature has $k$ random splits $t_k$ to choose from.
 
-# Lecture 9 - GBDT
+# **Lecture 9 - GBDT**
 
 **SGD (Stochastic Gradient Descent)** -  Gradient Descent, but instead of using the entire dataset it takes small batch at a time, making it much faster for large datasets.
 
@@ -480,11 +484,15 @@ So each feature has $k$ random splits $t_k$ to choose from.
 - `min_samples_leaf` (default value = 1);
 - `max_depth` — maximum tree depth (default value = 3).
 
-# Lecture 10 - Intro in DL
+# **Lecture 10 - Intro in DL**
+
+## Dense Layer
+
+**Dense layer** (fully connected) - network layer, where every input unit connects to every output unit.
 
 ## Activation Function
 
-Fun fact: We really have smth like activation functions in our brain: ReLU, sigmoid.
+**Fun fact**: We really have smth like activation functions in our brain: ReLU, sigmoid.
 
 ReLU might give 0 gradient $\to$ Leaky ReLU, ELU, GELU, SiLU **but** they are harder to compute.  
 
@@ -492,11 +500,57 @@ Use ReLU as baseline.
 
 > Use **GELU**, because it's like ReLU, but has non-zero gradient near 0.
 
+## NAS (Neural Architecture Search)
+
+It’s a subfield of **AutoML** of designing neural network structures using search algorithms (RL, evolutionary, gradient-based), guided by a performance objective.
+
+## `.to(device)`
+
+```py
+a = torch.ones(N)
+a.cuda()    # bad - could be no GPU
+```
+
+Do:
+
+```py
+CUDA_DEVICE_IDX = 0
+device = torch.device(f"cude:{CUDA_DEVICE_IDX}") if torch.cuda.is_available else torch.device("cpu")
+
+a = torch.ones(N)
+a.to(device)
+```
+
+## [torchsummary](https://pypi.org/project/torch-summary/)
+
+Concise summary of PyTorch models.
+
+## [gradcam](https://github.com/jacobgil/pytorch-grad-cam)
+
+WOW!
+
+Can compute gradients for class by input with highlighting.
+
+## `torch.CrossEntropyLoss`
+
+It takes logits, not softmax'ed probabilities, in order to not lose information.
+
+```py
+a = torch.range(1, 20)
+plt.bar(range(20), torch.softmax(a, dim=-1))
+```
+
+![alt text](notes_images/crossentropy.png)
+
 ## Adversial Attack
+
+### Supernormal Stimulus
+
+The chicks preferred the dramatic contrast of the red stick with the yellow markings, therefore the artificial stimulus of the stick model was favored over the basic herring gull head and bill models, proving that the artificial stimuli was favored over the naturally occurring stimuli.
 
 ![AA](notes_images/adversial_attack.png)
 
-# Lecture 12 - smth in DL
+# **Lecture 11 - Intro in DL (2)**
 
 **Epoche** - one full pass through the entire training dataset.  
 Example: If you have 10,000 samples and batch size = 100 $\to$ 1 epoch = 100 updates.
@@ -568,7 +622,8 @@ $|B|$ - batch, $|W|$ - weights.
 
 ### Normalization
 
-Always **normalize** your inputs in the model.  
+> Always **normalize** your inputs in the model.  
+
 Also it helps with:
 
 - **gradient explosion**
@@ -584,7 +639,7 @@ Also it helps with:
 1. Compute batch mean and variance:
 
     $$
-    \mu_B = \frac{1}{m} \sum_{i=1}^{m} x_i, \quad 
+    \mu_B = \frac{1}{m} \sum_{i=1}^{m} x_i, \quad
     \sigma_B^2 = \frac{1}{m} \sum_{i=1}^{m} (x_i - \mu_B)^2
     $$
 
@@ -617,7 +672,163 @@ Text augmentations.
 
 Use `albumentations` library for CV.
 
-# Lecture 13 - RNN
+# **Lecture 12 - CNN**
+
+We apply CNN when _input_ data has structural relations within itself.
+
+**Kernel** $\equiv$ **Filter**
+
+CNN = Convolutions & Pooling & Dense Layers
+
+![alt text](notes_images/convolution01.png)
+
+## Convolution Implementation
+
+_Conceptually_, CNNs apply a small kernel sliding over an input.  
+But under the hood, there are multiple equivalent views of how to do it.
+
+> In practice: cuDNN/oneDNN benchmark several of these with your tensor shapes & datatype and cache the fastest choice.
+
+### FFT-based convolution
+
+...
+
+### Direct convolution (loop-based)
+
+Iterate spatially and apply kernel.
+
+- Pros: low memory
+- Cons: harder to optimize at scale
+
+### im2col + GEMM
+
+**GEMM** - general matrix–matrix multiplication.
+
+- Input is "unrolled" into a big **Toeplitz-like** matrix (**im2col**) representation.
+- Each row corresponds to one sliding window region of the input.
+- The kernel (filter) is flattened into a vector.
+
+Then convolution becomes:
+
+$$
+Y = X_{\text{im2col}} \cdot W
+$$
+
+- $X_{\text{im2col}}$ — very large, sparse matrix with duplicated pixel values.  
+- $W$ — vector of kernel weights.  
+- $Y$ — flattened output feature map.
+
+The weights are **shared** and trainable.
+
+- Cons: takes a lot of memory $\to$ avoided on GPUs; might be too sparsed
+
+![alt text](notes_images/im2col.png)
+
+## Convolution VS Pooling
+
+### Convolution
+
+- Takes a kernel (with **learned weights**) and computes weighted sums of local regions.
+- Formula (for 2D conv):
+    $$
+    y_{i,j} = \sum_{m,n} w_{m,n} \cdot x_{i+m,j+n} + b
+    $$
+- Parameters: kernel weights $w_{m,n}$ are **trainable**.
+
+### Pooling
+
+- Takes a fixed function (no learnable parameters) over a local region.
+- Common: **max pooling** (take max), **average pooling** (take mean).
+- Example (2×2 max pool):
+    $$
+    y_{i,j} = \max_{m,n \in \{0,1\}} x_{i+m,j+n}
+    $$
+- Parameters: **none**
+
+### Summary
+
+- **Convolution** extracts features by learning filters (edges, textures, patterns)
+
+- **Pooling** reduces spatial size (**downsampling**).
+
+## Intermidiate Features
+
+![alt text](notes_images/convolution02.png)
+
+## Stride, Padding, Dilation
+
+Stride - step between 2 convolutions.
+
+Padding - to work with corners (filling zeros).
+
+> Using padding we can keep the dimensionality when using convolution and do many iterations (with activation function).
+
+![alt text](notes_images/dilation.png)
+
+## LeNet (1988)
+
+![alt text](notes_images/lenet.png)
+
+## AlexNet (2012)
+
+The thing is that LeNet & AlexNet architectures are very alike.  
+But AlexNet was trained on ton of data that LeNet didn't have.
+
+![alt text](notes_images/alexnet.png)
+
+## GoogLeNet (2014)
+
+![alt text](notes_images/googlenet.png)
+
+It has 3 heads in order to deal with diminishing gradients $\leftarrow$ now it's outdated.
+
+## ResNet (2015)
+
+Using Residual Blocks with padding we can keep the dimensionality and do a lot of iterations with activation functions $\to$ in a way it looks like RNN for images!!
+
+![alt text](notes_images/resnet.png)
+
+In a way ResNet is ensemble of models if we unwrap it.
+
+![alt text](notes_images/resnet_idea.png)
+
+### Residual Block
+
+![alt text](notes_images/residual_block.png)
+
+#### Idea
+
+Instead of learning a direct mapping  
+
+$$
+y = \mathcal{F}(x)
+$$
+
+we let the block learn a **residual function**  
+
+$$
+y = \mathcal{F}(x) + x
+$$
+
+where:
+
+- $x$ = input,  
+- $\mathcal{F}(x)$ = output of a few layers (conv → BN → ReLU),  
+- $x$ is added back via a **skip connection (shortcut)**.
+
+This makes optimization easier: if the best mapping is "just pass input through," the block can learn $\mathcal{F}(x) \approx 0$, and the identity mapping survives.
+
+#### Formula
+
+$$
+y = \sigma\big( \mathcal{F}(x, W) + W_s x \big)
+$$
+
+- $\mathcal{F}(x, W)$: transformation (stack of convs with weights $W$)  
+- $W_s$: optional projection (identity or 1×1 conv)  
+- $\sigma$: activation (ReLU)
+
+# **Lecture 13 - RNN, LSTM**
 
 ## RNN
 
@@ -677,4 +888,66 @@ LSTM:
 
 2. Solves the problem of **vanishing gradient**, because **cell state** has no $\tanh$ or similar.
 
-# Lecture 14 - Markov Property, RNN
+# **Lecture 14 - Self-Supervised Learning**
+
+## Self-Supervised Learning (SSL)
+
+**Self-supervised learning** - subfield of **unsupervised learning** where, instead of relying on external manual labels, the model defines a pretext task with automatically obtainable labels.
+
+> The thing is to use SSL-trained model as a base for later used for downstream tasks model.
+
+Advantages:
+
+- Reduces dependence on expensive labeled data.
+
+- Provides general-purpose representations (foundation models).
+
+- Scales extremely well with data size.
+
+### Learning to inpaint by reconstruction
+
+![alt text](notes_images/ssl01.png)
+
+### Image Coloring
+
+![alt text](notes_images/ssl02.png)
+
+![alt text](notes_images/ssl03.png)
+
+![alt text](notes_images/ssl04.png)
+
+### Contrastive Representative Learning
+
+- Similar samples (positive pairs) are close together
+- Dissimilar samples (negative pairs) are far apart
+
+Goal: learn embeddings that capture semantic structure without manual labels.
+
+![alt text](notes_images/ssl05.png)
+
+### SimCLR (Google, 2020)
+
+Augmentations + InfoNCE loss.
+
+SimCLR exceeded supervised baselines on **ImageNet** with no labels during pretraining.  
+Inspired a huge wave of contrastive and non-contrastive (BYOL, SimSiam) approaches.
+
+### CLIP (OpenAI, 2021)
+
+CLIP learns a joint vision–language embedding space by contrasting images and natural language descriptions.
+
+![alt text](notes_images/clip.png)
+
+After CLIP we got **diffusion models**!
+
+# **Lecture 15 - Unsupervised Learning**
+
+## Manifold assumption & Latent Space
+
+![alt text](notes_images/manifold.png)
+
+![alt text](notes_images/latent_space.png)
+
+### Word2Vec
+
+![alt text](notes_images/word2vec.png)

@@ -1,4 +1,4 @@
-<!-- markdownlint-disable MD001 MD029 MD033 MD045 -->
+<!-- markdownlint-disable MD025 MD029 MD033 MD045 -->
 # Tasks
 
 ## pull
@@ -1484,7 +1484,7 @@ void example() {
 }
 ```
 
-## 4. Other memory
+## 4-8. Other memory
 
 While static, stack, and heap memory cover most use cases in typical programming, they are not the only memory regions in a program:
 
