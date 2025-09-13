@@ -1,12 +1,25 @@
-*.out
-*.gdb_history
-*videos/
-*.vscode/
-*smeshnyavky/
-*review/
-*reviews/
-*.cpp
-*.ipynb
-*vbalab/
-*concur/
-*preparation/
+# *.out
+# *.gdb_history
+# *videos/
+# *.vscode/
+# *review/
+# *reviews/
+# *.ipynb
+# *vbalab/
+# *concur/
+
+# Ignore everything
+*
+
+# But not these file types
+!*.md
+!*.jpg
+!*.png
+!*.cpp
+!*.py
+
+# Also, allow directories so Git can traverse into them
+!*/
+
+preparation/
+smeshnyavky/
