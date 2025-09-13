@@ -1,13 +1,3 @@
-# *.out
-# *.gdb_history
-# *videos/
-# *.vscode/
-# *review/
-# *reviews/
-# *.ipynb
-# *vbalab/
-# *concur/
-
 # Ignore everything
 *
 
