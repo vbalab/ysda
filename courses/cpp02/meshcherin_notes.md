@@ -2281,4 +2281,3 @@ The difficulty of implementation raises exponensially if we account for:
 - `std::static_pointer_cast`, `std::dynamic_pointer_cast`, `std::const_pointer_cast`, `std::reinterpret_pointer_cast`
 
 ## `std::any`
-

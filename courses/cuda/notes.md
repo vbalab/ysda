@@ -7,11 +7,11 @@ ssh balabaevvl@45.93.203.34
 ssh shad-gpu
 
 # scp /path/to/local/file username@remote_host:/path/to/remote/destination
-scp main.cu shad-gpu:cuda/
-scp notes.md shad-gpu:cuda/
+scp main.cu shad-gpu:courses:cuda/
+scp notes.md shad-gpu:courses/cuda/
 
 # scp username@remote_host:/path/to/remote/file /path/to/local/destination
-scp -r shad-gpu:cuda/* .
+scp -r shad-gpu:courses/cuda/* .
 ```
 
 # Lecture 1 - Intro

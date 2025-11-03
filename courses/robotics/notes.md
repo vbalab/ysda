@@ -45,10 +45,17 @@ Download [Isaac Sim WebRTC Streaming Client](https://docs.isaacsim.omniverse.nvi
 
 ```bash
 isaacsim isaacsim.exp.full.streaming --no-window
-isaacsim isaacsim.exp.full.streaming --no-window --/app/livestream/publicEndpointAddress=45.93.203.34 --/app/livestream/port=49100^
+isaacsim isaacsim.exp.full.streaming --no-window --/app/livestream/publicEndpointAddress=45.93.203.34 --/app/livestream/port=49100
 ```
 
 ```bash
 ps -ef | grep isaacsim
 kill -KILL ...
+```
+
+---
+
+```bash
+isaacsim ... 2>&1 | tee isaacsim.log    # server
+scp shad-gpu:isaacsim.log .             # laptop
 ```

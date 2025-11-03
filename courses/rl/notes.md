@@ -123,21 +123,21 @@ G_t = \sum_{t'=t}^{\infty} \gamma^{t' - t} r_{t'}
 $$
 
 $$
-Q^\pi(s, a) = \mathbb{E}_\pi \left[ G_t \mid s_t = s, a_t = a \right]
+Q^\pi(s_t, a_t) = \mathbb{E}_\pi \left[ G_t \mid s_t, a_t\right]
 $$
 
 $$
-V^\pi(s) = \mathbb{E}_\pi \left[ G_t \mid s_t = s \right] = \mathbb{E}_{a_t \sim \pi} \left[ Q^\pi(s_t, a_t) \right]
+V^\pi(s_t) = \mathbb{E}_\pi \left[ G_t \mid s_t \right] = \mathbb{E}_{a_t \sim \pi} \left[ Q^\pi(s_t, a_t) \right]
 $$
 
 ### Recurrent Relations
 
 $$
-Q^\pi(s, a) = \mathbb{E}_{s_{t+1}} \left[ r_t + \gamma V^\pi(s_{t+1}) \right]
+Q^\pi(s_t, a_t) = \mathbb{E}_{s_{t+1}} \left[ r_t + \gamma V^\pi(s_{t+1}) \right]
 $$
 
 $$
-Q^\pi(s, a) = \mathbb{E}_{s_{t+1}, a_{t+1} \sim \pi} \left[ r_t + \gamma Q^\pi(s_{t+1}, a_{t+1}) \right]
+Q^\pi(s_t, a_t) = \mathbb{E}_{s_{t+1}, a_{t+1} \sim \pi} \left[ r_t + \gamma Q^\pi(s_{t+1}, a_{t+1}) \right]
 $$
 
 ### Optimal Policy
@@ -180,7 +180,7 @@ $$
 \mathbb{E}_{a \sim \pi(\cdot|s)} Q^{\hat{\pi}}(s,a) \;\geq\; V^{\hat{\pi}}(s),
 $$
 
-then the new policy $ \pi $ is guaranteed to be **as good as or better** than $ \hat{\pi} $.  
+then the new policy $ \pi $ is guaranteed to be **as good as or better than** $ \hat{\pi} $.  
 
 In form of optimization:
 
@@ -280,6 +280,8 @@ $$ \hat{Q}(s, a) = r(s, a) + \gamma Q(s', a') $$
 
 ### Expected Value SARS(A)
 
+[btw, note that it's off-policy now and far away from SARSA really]
+
 $$ \hat{Q}(s, a) = r(s, a) + \gamma \cdot \mathbb{E}_{a' \sim \pi(a' \mid s')}{Q(s', a')} $$
 
 ## Value Learning Policy Strategies
@@ -292,13 +294,13 @@ Policy derived from values using one of the following strategies:
 - **$\epsilon$-greedy policy**:  
   With probability $ \epsilon $, take a random action (exploration), with $ 1 - \epsilon $, take greedy action (exploitation)
 
+- **Greedy in the limit of infinite exploration (GLIE)**:  
+  Exploration decays over time, but all actions are eventually tried infinitely often.
+
 - **Softmax / Boltzmann policy**:  
   Choose actions stochastically based on their relative Q-values:  
   $ \pi(a|s) = \frac{e^{Q(s,a)/\tau}}{\sum_b e^{Q(s,b)/\tau}} $,  
   where $ \tau $ is the temperature (controls exploration)
-
-- **Greedy in the limit of infinite exploration (GLIE)**:  
-  Exploration decays over time, but all actions are eventually tried infinitely often.
 
 ## On/Off-Policy
 
@@ -1418,7 +1420,7 @@ $$
 \nabla_\theta J(\theta) = \mathbb{E}_s \mathbb{E}_{\epsilon \sim p(\epsilon)} \nabla_\theta Q(s, f(s, \epsilon, \theta))
 $$
 
-## DDPG (Deep Deterministic Policy Gradient)
+## [DDPG (Deep Deterministic Policy Gradient)](https://arxiv.org/abs/1509.02971)
 
 DDPG is designed for _continuous_ action spaces where it's okay to assume deterministic policy:
 
@@ -1429,7 +1431,7 @@ $$
 The gradient becomes **Deterministic Policy Gradient**:
 
 $$
-\nabla_\theta J(\theta) = \mathbb{E}_{s \sim \rho^\mu} \Big[ \nabla_\theta \pi(s, \theta)  \nabla_a Q^\pi(s,a) \big|_{a=\pi(s, \theta)} \Big].
+\nabla_\theta J(\theta) = \mathbb{E}_{s \sim \rho^\mu} \Big[ \nabla_a Q^\pi(s,a) \big|_{a=\pi(s, \theta)} \cdot \nabla_\theta \pi(s, \theta) \Big].
 $$
 
 - **Key difference:** No log-derivative. We backpropagate through the critic ($Q$) w.r.t. action.
@@ -1454,7 +1456,7 @@ TD3 = DDPG + 3 stabilizers:
 
 ![alt text](notes_images/td3_2.png)
 
-## Maximum Entropy RL
+## [Maximum Entropy RL](https://arxiv.org/abs/1702.08165)
 
 ### Problem
 
@@ -1476,18 +1478,18 @@ $$
 
 ### Soft Value Functions
 
-Entropy modifies the Bellman equations:
-
-- **Soft Q-function**
-
-$$
-Q^\pi(s,a) \;=\; r(s,a) + \gamma  \mathbb E_{s'\sim P}\!\big[ V^\pi(s') \big].
-$$
+Entropy modifies the Bellman equation:
 
 - **Soft Value Function**
 
 $$
 V^\pi(s) \;=\; \mathbb E_{a\sim\pi(\cdot|s)} \!\big[ Q^\pi(s,a) \;-\; \alpha \log \pi(a|s) \big].
+$$
+
+- **Soft Q-function**
+
+$$
+Q^\pi(s,a) \;=\; r(s,a) + \gamma  \mathbb E_{s'\sim P}\!\big[ V^\pi(s') \big].
 $$
 
 ### Optimal Policy
@@ -1500,11 +1502,11 @@ $$
 Z(s) \;=\; \int_{\mathcal A} \exp\!\Big(\tfrac{1}{\alpha} Q^*(s,\tilde a)\Big)  d\tilde a.
 $$
 
-## SAC
+## [SAC (Soft Actor-Critic)](https://arxiv.org/abs/1801.01290)
 
 SAC is based on Maximum Entropy RL.
 
-### (a) Critics (twin) with entropy in the target
+### (a) Critic (twin) with entropy in the target
 
 $$
 y_Q(s,a,r,s') \;=\; r \;+\; \gamma \;\mathbb E_{a'\sim \pi_\theta(\cdot|s')}\!

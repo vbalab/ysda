@@ -211,7 +211,9 @@ proebav
 
 # **Lecture 6 - Dimensionality Reduction Methods**
 
-proebav
+proebav!
+
+t-SNE
 
 # **Lecture 7 - Decision Trees**
 
@@ -618,45 +620,33 @@ $|B|$ - batch, $|W|$ - weights.
 
 **Learning rate decay** - technique used to gradually reduce the learning rate during training.
 
-## Normalization & Batch Normalization
-
-### Normalization
+## Normalization
 
 > Always **normalize** your inputs in the model.  
 
-Also it helps with:
+It helps with:
 
 - **gradient explosion**
-- _regularizations_
-- _scaling issues_, like ones in kNN when delaing with features of different scale.
-- dealing with _activation functions_ when training
-- floats in PLs have better _grid near 0_
 
-### Batch Normalization
+- **internal covariate shift** - the distribution of activations keeps changing as parameters update.
 
-**BatchNorm** normalizes layer inputs to stabilize training that suffers from **internal covariate shift**.
-
-1. Compute batch mean and variance:
-
-    $$
-    \mu_B = \frac{1}{m} \sum_{i=1}^{m} x_i, \quad
-    \sigma_B^2 = \frac{1}{m} \sum_{i=1}^{m} (x_i - \mu_B)^2
-    $$
-
-2. Normalize:
-
-    $$
-    \hat{x}_i = \frac{x_i - \mu_B}{\sqrt{\sigma_B^2 + \epsilon}}
-    $$
-
-3. Scale & Shift
-
-    $$
-    \hat{y}_i = \gamma \hat{x}_i + \beta
-    $$
-
-    To prevent from:  
     ![BN](notes_images/batch_normalization.png)
+
+- _regularizations_
+
+- _grid near 0_ denser for float
+
+### Batch & Layer Normalization
+
+**Sample** - example - one instance.  
+**Batch** - bag of samples.
+
+| Aspect                       | **Batch Normalization (BN)**                                                                                                           | **Layer Normalization (LN)**                                                                                             |
+| ---------------------------- | -------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------ |
+| **Normalization**       | Mean/variance computed over all samples in the batch, separately per feature.   | Mean/variance computed within a single sample, across all its features. |
+| **Formulas**                 | $$\mu_d = \tfrac{1}{B}\sum_i x_{i,d}$$ $$\sigma_d^2 = \tfrac{1}{B}\sum_i (x_{i,d} - \mu_d)^2$$ $$\hat{x}_{i,d} = \tfrac{x_{i,d} - \mu_d}{\sqrt{\sigma_d^2 + \epsilon}}$$                                                | $$\mu_i = \tfrac{1}{D}\sum_d x_{i,d}$$ $$\sigma_i^2 = \tfrac{1}{D}\sum_d (x_{i,d} - \mu_i)^2$$ $$\hat{x}_{i,d} = \tfrac{x_{i,d} - \mu_i}{\sqrt{\sigma_i^2 + \epsilon}}$$                                |
+| **Stability**                | Can destabilize if batch is too small or highly non-i.i.d. across batch.                                                               | Stable even with variable batch size or sequence lengths.                                                                |
+| **Best for**          | CNNs (large batches and images are i.i.d.).                                                                 | Transformers, RNNs, NLP (batch statistics are unreliable).                                                   |
 
 ## Regularization
 
@@ -679,6 +669,8 @@ We apply CNN when _input_ data has structural relations within itself.
 **Kernel** $\equiv$ **Filter**
 
 CNN = Convolutions & Pooling & Dense Layers
+
+> In the beginning they thought that kernel size should be big to capture features. But 3x3 or 5x5 are actually capture similiraly while having much less parameters.
 
 ![alt text](notes_images/convolution01.png)
 
@@ -757,13 +749,14 @@ The weights are **shared** and trainable.
 
 ## Stride, Padding, Dilation
 
-Stride - step between 2 convolutions.
+- **Stride** - step between 2 convolutions.
 
-Padding - to work with corners (filling zeros).
+- **Padding** - to work with corners (filling zeros).
 
 > Using padding we can keep the dimensionality when using convolution and do many iterations (with activation function).
 
-![alt text](notes_images/dilation.png)
+- **Dilation**:
+    ![alt text](notes_images/dilation.png)
 
 ## LeNet (1988)
 
@@ -780,7 +773,11 @@ But AlexNet was trained on ton of data that LeNet didn't have.
 
 ![alt text](notes_images/googlenet.png)
 
-It has 3 heads in order to deal with diminishing gradients $\leftarrow$ now it's outdated.
+It has 3 heads in order to deal with diminishing gradients $\leftarrow$ now it's outdated:
+
+- Skip connections let gradients flow directly back to earlier layers.
+- Batch Normalization (BN, 2015) stabilizes activations and gradients.
+- Adam, RMSProp, momentum-SGD with tuned learning rate schedules.
 
 ## ResNet (2015)
 
@@ -868,25 +865,54 @@ Vanilla RNN uses $\tanh$, because $h_t$ should be i.i.d. $\to$ can't use ReLU (R
 
 ![BN](notes_images/rnn.png)
 
+The update rule is:
+
+$$
+h_t = \phi(W_h h_{t-1} + W_x x_t + b)
+$$
+
+- $h_t$ - **hidden state** (not the target variable)
+
+We input $h_t$ nput to a prediction layer:
+
+$$
+\hat{y}_t = g(W_y h_t + b_y)
+$$
+
 ## LSTM
 
+1. forget gate
+2. input gate
+3. output gate
+
+- $C_t$ (**cell state**): the **internal long-term memory** of the LSTM, updated additively by gates.
+
+- $h_t$ (**hidden state**): the **output** of the LSTM at timestep $t$, a gated and squashed view of $C_t$, used for predictions or passed to the next layer.
+
 ![BN](notes_images/lstm.png)
-
-1. what to forget
-
-2. what to remember
-
-3. what to add
 
 ![BN](notes_images/lstm_overview.png)
 
 ![BN](notes_images/lstm_math.png)
 
-LSTM:
+LSTM also solves the problem of **vanishing/exploting gradient**.
 
-1. Provides long-term context for current token
+We can **parallelize** RNNs & LSTMs training by parallelizing inputs in batches.
 
-2. Solves the problem of **vanishing gradient**, because **cell state** has no $\tanh$ or similar.
+## LSTM's Layers
+
+> An **LSTM can be stacked in layers**, just like CNN.
+
+The **output hidden states** from one LSTM layer $(h_t^{(1)})$ are fed as the **inputs** to the next LSTM layer:
+
+$$
+h_t^{(l)} = \text{LSTM}^{(l)}(h_{t-1}^{(l)}, h_t^{(l-1)}, C_{t-1}^{(l)})
+$$
+
+- $l$ = layer index,  
+- $h_t^{(0)} = x_t$ (the original input).
+
+Analogous to CNNs: first layers catch edges, later layers catch objects.
 
 # **Lecture 14 - Self-Supervised Learning**
 

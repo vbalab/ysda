@@ -381,7 +381,7 @@ $O(n)$ time using a divide and conquer by:
 
 ![alt text](<notes_images/fft.png>)
 
-**Binarization** of alphabet $\Sigma$ into sequances of bits ($\{0, 1\}$) of length $\log(\Sigma)$: 
+**Binarization** of alphabet $\Sigma$ into sequances of bits ($\{0, 1\}$) of length $\log(\Sigma)$:
 
 ![alt text](notes_images/binarization.png)
 
