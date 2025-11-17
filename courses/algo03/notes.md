@@ -61,27 +61,27 @@ Reading/Writing with bufferization.
 
 # **Seminar 1**
 
-![alt text](image.png)
+![alt text](sum.png)
 
 # **Lecture 2 - List ranking & Time forward processing & B-tree**
 
 ## List Ranking
 
-![alt text](image-1.png)
+![alt text](notes_images/list_ranking01.png)
 
-![alt text](image-4.png)
+![alt text](notes_images/list_ranking04.png)
 
 $n(i) = \text{next}(i)$
 
 ### Reduction
 
-![alt text](image-2.png)
+![alt text](notes_images/list_ranking02.png)
 
 ### Join
 
 Duplicate pairs $\to$ sort one by the first key, sort the other by the second key $\to$ 2 pointers to do join.
 
-![alt text](image-3.png)
+![alt text](notes_images/list_ranking03.png)
 
 Using joins on pairs:
 
@@ -110,15 +110,10 @@ $$
 | **Maximum stable set**  | A stable set of largest possible size in the graph. Its size is the **stability number** ( \alpha(G) ).       |
 | **Maximal stable set**  | A stable set that **cannot be extended** by adding any other vertex (but not necessarily of maximum size).    |
 
-![alt text](image-6.png)
+![alt text](notes_images/stable_set02.png)
 
-![alt text](image-5.png)
-
-# **Seminar 2**
-
-
+![alt text](notes_images/stable_set01.png)
 
 # **Lecture 3 - Buffer Tree**
 
-![alt text](image-7.png)
-
+![alt text](notes_images/buffer_tree.png)

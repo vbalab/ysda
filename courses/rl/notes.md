@@ -1,13 +1,5 @@
 <!-- markdownlint-disable MD001 MD010 MD024 MD025 MD041 MD049 -->
 
-> # **Notes**
-
-Modern chatbot systems do mimic human specialization, either via:
-
-- **Mixture of Experts (MoE)**: One big LLM with specialized internal modules
-
-- **Router + Specialized LLMs**: A system that picks the right LLM for the task
-
 > # **YSDA Lectures**
 
 # **YSDA Lecture 1 - MDP, CEM**
@@ -865,8 +857,6 @@ Since REINFORCE, A2C are _on-policy_ $\to$ can't use experience replay $\to$ uti
 
 # **YSDA Lecture 7 - TRPO, PPO**
 
-## Intuition
-
 REINFORCE, A2C, A3C — **on-policy** $\to$ **sample-inefficient** — you can’t reuse old rollouts much.
 
 **TRPO** and **PPO** using importance sampling on restricted  for $\theta$ area solve for that.
@@ -1063,7 +1053,7 @@ This task is hard to solve, so we have **TRPO** & **PPO**.
 
 $D_{\text{KL}}(P  \|  Q)$ measures how different distribution $Q$  is from distribution $P$.
 
-For two probability distributions $P$ and Q over the same space $ \mathcal{X} $:
+For two probability distributions $P$ and $Q$ over the same space $ \mathcal{X} $:
 
 $$
 D_{\text{KL}}(P  \|  Q) = \sum_{x \in \mathcal{X}} P(x) \log \frac{P(x)}{Q(x)}
@@ -1082,7 +1072,7 @@ Good **property** of KL divergence is that:
 $$
 \big| \pi_{\theta'}(a_t \mid s_t) - \pi_\theta(a_t \mid s_t) \big|
 \;\le\;
-\sqrt{ \tfrac{1}{2} D_{\mathrm{KL}}\!\left(\pi_{\theta'}(a_t \mid s_t) \| \pi_\theta(a_t \mid s_t)\right) }
+\sqrt{ \tfrac{1}{2} D_{\mathrm{KL}}\!\left(\pi_{\theta'}(\cdot \mid s_t) \| \pi_\theta(\cdot \mid s_t)\right) }
 $$
 
 ### TRPO Task
@@ -1601,7 +1591,9 @@ $$
 
 > Uncertain arms look artificially better, so they are tried until uncertainty shrinks.
 
-## Hoeffding's Inequality
+## UCB
+
+### Hoeffding's Inequality
 
 Let $X_1, \dots, X_n \in [0,1]$, i.i.d. with mean $\mu$.  
 
@@ -1627,7 +1619,7 @@ $$
 
 This gives us the confidence radius $b_i(t)$.  
 
-## UCB
+### UCB
 
 > Frequentist, confidence intervals
 
@@ -1801,7 +1793,7 @@ $$
 
 ![alt text](notes_images/mcts.png)
 
-### 1) Problem setup
+### Problem setup
 
 We want the **optimal action at the root state** $s_\circ$ that maximizes expected discounted return:
 
@@ -1816,7 +1808,7 @@ MCTS builds a **partial lookahead tree** $\mathcal T$ rooted at $s_\circ$ by rep
 3. **Evaluation / Rollout** from the leaf (either a default policy rollout or a learned value $V$).
 4. **Backpropagation**: update visit counts and value estimates along the selected path.
 
-### 2) Node statistics and notation
+### Node statistics and notation
 
 For each edge $(s,a)$ in the built tree, MCTS maintains:
 
@@ -1825,9 +1817,9 @@ For each edge $(s,a)$ in the built tree, MCTS maintains:
 - $\widehat Q(s,a)$: empirical mean return when choosing $a$ at $s$.
 - Optional: **policy prior** $P_\phi(a\mid s)$ and **value prior** $V_\psi(s)$.
 
-### 3) Selection: from bandits to trees
+### (1) Selection: from bandits to trees
 
-#### 3.1 UCT (UCB1 applied to trees)
+#### **1.1 UCT (UCB1 applied to trees)**
 
 $$
 a \in \arg\max_{a\in\mathcal A(s)}
@@ -1836,7 +1828,7 @@ Q(s,a) + c \sqrt{\frac{\ln\!\big(N(s)\big)}{N(s,a)}}
 \right].
 $$
 
-#### 3.2 PUCT (policy-guided UCT)
+#### **1.2 PUCT (policy-guided UCT)**
 
 - We have a **prior policy** $\pi_\theta(a\mid s)$.
 
@@ -1847,13 +1839,13 @@ Q(s,a) + c \, \pi_\theta(a\mid s) \frac{\sqrt{N(s)}}{1+N(s,a)}
 \Big].
 $$
 
-### 4) Expansion
+### (2) Expansion
 
 - Expand when a leaf $s_L$ is first reached (or when its visit count passes a threshold).
 
 - Use **progressive widening** with _large/continuous_ action spaces.
 
-### 5) Leaf evaluation: rollout vs bootstrap
+### (3) Evaluation: rollout vs bootstrap
 
 1. **Rollout (simulation)** with a default policy $\pi_{\text{ro}}$:
 
@@ -1873,7 +1865,7 @@ $$
     V(s_L)=\lambda V_\psi(s_L) + (1 - \lambda) \hat{V}(s_L).
     $$
 
-### 6) Backpropagation operators
+### (4) Backpropagation
 
 Let the selected path be $(s_0,a_0,r_0,s_1,a_1,r_1,\dots,s_L)$. Define a **backup target** at step $i$:
 $$
@@ -1907,6 +1899,123 @@ V^*(s) \;=\; \max_{\pi_1}\min_{\pi_2}\; \mathbb E\!\left[\sum_{t=0}^{\infty}\gam
 $$
 
 With alternating turns, minimax can be written as max/min over the player-to-move at each depth.
+
+> # **[CS 285 at UC Berkeley](https://rail.eecs.berkeley.edu/deeprlcourse/)**
+
+# **Lecture 10: Optimal Control and Planning**
+
+## Trajectory Optimization with Derivatives
+
+![alt text](notes_images/optimal_trajectory.png)
+
+$$
+\min_{u_1, \ldots, u_T}
+\sum_{t=1}^{T} c(x_t, u_t)
+\quad \text{s.t.} \quad
+x_t = f(x_{t-1}, u_{t-1})
+$$
+
+## iLQR
+
+> iLQR ≈ “Newton’s method” for optimal control
+
+### iLQR iteration
+
+At each iteration, we **linearize the dynamics** and **quadratically approximate the cost** around a nominal trajectory $ (\bar{x}_t, \bar{u}_t) $:
+
+$$
+\delta x_{t+1} = f_x \, \delta x_t + f_u \, \delta u_t,
+$$
+
+$$
+\ell(x_t, u_t) \approx \ell_0 + \ell_x^\top \delta x_t + \ell_u^\top \delta u_t + \tfrac{1}{2}
+\begin{bmatrix}
+\delta x_t \\ \delta u_t
+\end{bmatrix}^\top
+\begin{bmatrix}
+\ell_{xx} & \ell_{xu} \\
+\ell_{ux} & \ell_{uu}
+\end{bmatrix}
+\begin{bmatrix}
+\delta x_t \\ \delta u_t
+\end{bmatrix}.
+$$
+
+### Backward pass (Dynamic Programming)
+
+Define value function quadratic expansion:
+
+$$
+V_t(x_t) \approx V_t + V_x^\top \delta x_t + \tfrac{1}{2} \delta x_t^\top V_{xx} \delta x_t.
+$$
+
+At each step (backwards in time), compute the **Q-function**:
+
+$$
+Q_x = \ell_x + f_x^\top V_{x'}, \quad
+Q_u = \ell_u + f_u^\top V_{x'},
+$$
+$$
+Q_{xx} = \ell_{xx} + f_x^\top V_{xx'} f_x, \quad
+Q_{ux} = \ell_{ux} + f_u^\top V_{xx'} f_x, \quad
+Q_{uu} = \ell_{uu} + f_u^\top V_{xx'} f_u.
+$$
+
+Then get the **local control law**:
+
+$$
+k_t = - Q_{uu}^{-1} Q_u, \quad
+K_t = - Q_{uu}^{-1} Q_{ux}.
+$$
+
+Update value derivatives:
+
+$$
+V_x = Q_x + K_t^\top Q_{uu} k_t + K_t^\top Q_u + Q_{ux}^\top k_t,
+$$
+$$
+V_{xx} = Q_{xx} + K_t^\top Q_{uu} K_t + K_t^\top Q_{ux} + Q_{ux}^\top K_t.
+$$
+
+### Forward pass
+
+Roll out new trajectory:
+
+$$
+u_t = \bar{u}_t + \alpha k_t + K_t (x_t - \bar{x}_t),
+$$
+$$
+x_{t+1} = f(x_t, u_t),
+$$
+
+with step size $ \alpha \in (0, 1] $ (line search).
+
+## MPC (Model Predictive Control)
+
+Every time step:  
+
+1. observe the state $ x_t $  
+
+2. use iLQR to plan $ u_t, \ldots, u_T $ to minimize  
+
+    $$
+    \sum_{t' = t}^{t + T} c(x_{t'}, u_{t'})
+    $$
+
+3. execute action $ u_t $, **discard** $ u_{t+1}, \ldots, u_{t+T} $
+
+The plan is quite **short** and updated (discarded) at each new step.  
+So only first action of whole plan is executed at each step.
+
+### [Synthesis and stabilization of complex behaviors through online trajectory optimization](https://ieeexplore.ieee.org/document/6386025)
+
+![alt text](notes_images/mpc.png)
+
+# **Lecture 11: ...**
+
+## MPC
+
+...
 
 > # **Other Lectures**
 

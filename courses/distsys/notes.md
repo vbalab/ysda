@@ -223,17 +223,17 @@ $\to$ No intermediate routing — direct lookup.
 Each process proposes a value $ v_i $.  
 They must **agree on one common value** satisfying 3 properties:
 
-1. **Validity**
+1. **Validity**  
    The decided value must be one of the proposed ones.
 
    $$
    v_{\text{decided}} \in \{ v_i \mid \text{some process proposed } v_i \}
    $$
 
-2. **Agreement (Safety)**
-   No two processes decide on different values.
+2. **Agreement (Safety)**  
+   All non-faulty nodes agree on the same value.
 
-3. **Termination (Liveness)**
+3. **Termination (Liveness)**  
    Every correct process eventually decides some value.
 
 ### Atomic Broadcast $\equiv$ Consensus
@@ -258,17 +258,92 @@ This equivalence is foundational for protocols like **Paxos**, **Raft**, and **Z
 
 # **Lecture 4 - FLP**
 
-## FLP Theorem (Fischer–Lynch–Paterson, 1985)
-  
-No deterministic consensus algorithm can guarantee both **safety** and **liveness** in a **fully asynchronous** system with even **one possible crash failure**.
+## Setting (FLP Impossibility Theorem)
 
-## Consensus & Leader Election
+### System model
+
+- **Processes:**  
+  A finite set of $ n \ge 2 $ deterministic processes $ P_1, \dots, P_n $.  
+
+- **Communication:**  
+  - Asynchronous message-passing system.  
+  - Messages are delivered **reliably** (no loss, duplication, or corruption),  
+    but with **unbounded delay** — there is _no upper bound_ on message transmission time.  
+  - There is no global clock and no assumptions on relative process speeds.  
+  - A message that is sent is _eventually delivered_ unless the recipient has crashed.
+
+- **Failures:**  
+  - At most **one crash failure** (a process may stop taking steps forever).  
+  - No Byzantine (malicious) faults — just halting.
+
+- **Determinism:**  
+  - Processes are fully deterministic automata:  
+    their next step depends only on their current state and received messages.  
+  - No randomness, no nondeterministic branching.
+
+### Consensus problem definition
+
+Each process $ P_i $ starts with an **input value** $ v_i \in \{0,1\} $.  
+They must decide on an **output value** $ d_i \in \{0,1\} $ satisfying the three standard properties:
+
+1. **Termination:**  
+   Every non-faulty process eventually decides on some value.
+
+2. **Agreement:**  
+   No two processes decide differently:  
+   $$
+   \forall i,j \quad d_i = d_j
+   $$
+
+3. **Validity:**  
+   The decided value must be one of the initial values:  
+   $$
+   d_i \in \{v_1, \dots, v_n\}
+   $$
+
+### Adversarial scheduler
+
+An **asynchronous adversary (scheduler)** controls message delivery and process scheduling:
+
+- It can delay any message arbitrarily long.
+- It can choose which process takes the next step.
+- It may cause one process to crash at any time (stop forever).
+- But it must respect reliability: any message sent to a live process will _eventually_ be delivered if the sender and receiver both keep running.
+
+### Goal of FLP theorem
+
+**Claim:**  
+In this model, **no deterministic consensus algorithm** can guarantee all three properties (Termination, Agreement, Validity) if even **one process may crash**.
+
+Formally:
+
+There exists a fair execution (i.e., where all non-crashed processes take infinitely many steps and all messages are eventually delivered) such that **no process ever decides** — i.e., the system remains forever in a _bivalent_ (undecided) state.
+
+### Key idea of the proof
+
+- The system can start in a **bivalent configuration** (where both 0 and 1 are still possible decisions).
+- Because communication is asynchronous, the adversary can always delay just the right message to _keep_ the system bivalent.
+- Thus, the algorithm can be _forever indecisive_ — violating Termination, while still preserving Agreement and Validity.
+
+#### Consensus & Leader Election
 
 ![alt text](notes_images/leader_election.png)
 
-## Bivalent State
+#### Bivalent State
 
 ![alt text](notes_images/bivalent.png)
+
+## 1. Ben-Ora - Non-Determinism
+
+Deterministic consensus is impossible (FLP), because an adversary can always keep the system in a bivalent state by delaying messages.
+
+**Ben-Or’s trick**: introduce randomization so that even an adversary can’t predict all outcomes — eventually, by chance, all processes align on one value.
+
+> You still cannot guarantee deterministic termination for all runs, but you can get consensus w.p. 1.
+
+## 2. Paxos - Add timing (partial synchrony)
+
+Once the system eventually behaves synchronously, deterministic consensus is possible.
 
 # **Lecture 4.2 - Lock Service**
 
@@ -279,3 +354,5 @@ No deterministic consensus algorithm can guarantee both **safety** and **livenes
 ## Google File System & Google Big Table
 
 ...
+
+# **Lecture 5 - [Paxos](https://lamport.azurewebsites.net/pubs/paxos-simple.pdf)**
