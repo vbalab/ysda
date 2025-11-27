@@ -143,13 +143,13 @@ $$
 
 1. Skip-Gram
 
-    Given “cat”, predict {“the”, “sat”, “on”}.
+    Given "cat", predict {"the", "sat", "on"}.
 
     - Works well on small data, captures rare words better.
 
 2. CBOW (Continuous Bag of Words)
 
-    Given {“the”, “sat”, “on”}, predict “cat”.
+    Given {"the", "sat", "on"}, predict "cat".
 
 ### GloVe (Pennington et al., 2014)
 
@@ -199,7 +199,7 @@ $$
     1 & \text{otherwise}
     \end{cases} $
 
-  - prevents overweighting very frequent words (like “the”).  
+  - prevents overweighting very frequent words (like "the").  
   - ensures rare co-occurrences don’t dominate either.  
 
 After training, the **final embedding for a word** is often taken as the sum or average of $ w_i $ and $ \tilde{w}_i $.
@@ -252,8 +252,6 @@ $$
 
 #### SVD
 
----
-
 For any real matrix $A \in \mathbb{R}^{m \times n}$, the **singular value decomposition (SVD)** is a factorization:
 
 $$
@@ -262,8 +260,6 @@ $$
 
 - $U, V$ are orthogonal matrices,  
 - $\Sigma$ is diagonal with singular ($> 0$) values.
-
----
 
 Let’s set:
 $$
@@ -382,8 +378,8 @@ $$
 
 **Intuition**:
 
-- Words like “dog” occur in many different contexts $\to$ high continuation probability.  
-- Words like _“Francisco”_ occur mostly after “San” $\to$ low continuation probability, even if frequent overall.
+- Words like "dog" occur in many different contexts $\to$ high continuation probability.  
+- Words like _"Francisco"_ occur mostly after "San" $\to$ low continuation probability, even if frequent overall.
 
 ### 6.2 Discounted higher-order estimates
 
@@ -487,7 +483,7 @@ Pick as least output tokens to cover p% of CDF.
 
 #### **4.3. Beam Search**
 
-Keep the top $k$ most probable partial _sequences_ (the “beam”) at each step.
+Keep the top $k$ most probable partial _sequences_ (the "beam") at each step.
 
 > Nice use case: translation - keeps several translations of texts.
 
@@ -625,7 +621,7 @@ $$
 
 - Replaces the fixed $ c $ with a **dynamic context vector** $ c_t $ at each time step.
 - Additive scoring uses a small MLP $\to$ more flexible and stable on smaller datasets.
-- Enables the model to **“attend” to relevant parts of the input** as it generates each output token.
+- Enables the model to **"attend" to relevant parts of the input** as it generates each output token.
 
 ![alt text](notes_images/bahdanau.png)
 
@@ -922,8 +918,8 @@ $$
 
 where:
 
-- $ W_g $: “gate” projection
-- $ W_v $: “value” projection
+- $ W_g $: "gate" projection
+- $ W_v $: "value" projection
 
 # **Seminar 5**
 
@@ -963,11 +959,11 @@ There are two types of LLMs on the [hub](https://huggingface.co/):
 
 - **Self-Consistency:** sample multiple CoT paths and choose the majority answer.
 
-## Instruction Fine-Tuning (SFT)
+## Supervised Fine-Tuning (SFT)
 
 ![alt text](notes_images/sft.png)
 
-**Supervised Fine-Tuning (SFT)** adapts a pretrained LLM to follow human instructions by training it on (instruction, response) pairs.
+**Supervised Fine-Tuning (SFT)** adapts a pretrained LLM to follow human **instructions** by training it on (instruction, response) pairs.
 
 ### Human-based vs LLM-based Generated Instructions
 
@@ -986,13 +982,13 @@ Modern pipelines often combine both — start with human seeds, then expand auto
 
 Refusal training adjusts model behavior using fine-tuning or preference optimization so that:
 
-For unsafe prompts $\to$ the model outputs a refusal (e.g., “I’m sorry, but I can’t…”)
+For unsafe prompts $\to$ the model outputs a refusal (e.g., "I’m sorry, but I can’t…")
 
 | Method                                   | Description                                                      | Used By            |
 | ---------------------------------------- | ---------------------------------------------------------------- | ------------------ |
 | **RLHF (Reward Model)**                  | Train a reward model that prefers refusals on unsafe prompts     | OpenAI, Anthropic  |
 | **DPO (Direct Preference Optimization)** | Directly optimize on preferred/refused pairs without RL loop     | Newer LLMs         |
-| **Constitutional AI**                    | Use _AI-generated_ “constitutional principles” to train refusals | Anthropic’s Claude |
+| **Constitutional AI**                    | Use _AI-generated_ "constitutional principles" to train refusals | Anthropic’s Claude |
 | **Classifier-based Filtering**           | Separate safety model determines whether to answer or refuse     | Hybrid pipelines   |
 
 ### [Safety Alignment Should Be Made More Than Just a Few Tokens Deep](https://arxiv.org/abs/2406.05946)
@@ -1021,99 +1017,833 @@ output_ix = model.generate(**inputs, max_new_tokens=100, do_sample=False)
 print(tokenizer.decode(output_ix.flatten().tolist()))
 ```
 
-# **Lecture 7 - ...**
+# **Lecture 7 – Efficient & Parameter-Efficient LMs**
 
-## Group Query Attention
+## Mixture-of-Experts (MoE)
 
-...
+Instead of a single big FFN, have many "expert" FFNs and **route** each token to a small subset of them.
 
-## MoE
+Formally, for an input vector $x$:
 
-...
+$$
+y = \sum_{i=1}^E g_i(x)\, f_i(x)
+$$
 
-> sub-gradient & non-diff
+- $E$ – number of experts (FFNs).
+- $f_i$ – $i$-th expert network.
+- $g_i(x)$ – **gating network** scores (depends on token).
+
+### Sparse MoE
+
+We want **only a few experts active per token** (e.g. top-1 or top-2):
+
+1. Compute logits $a_i(x)$ with a small gating MLP.
+2. Compute softmax over experts: $p_i(x) = \text{softmax}(a_i(x))$.
+3. Keep only top-$k$ experts and renormalize:
+
+$$
+G(x) = \text{TopK}(p(x), k)
+$$
+
+Then:
+
+$$
+y = \sum_{i \in \text{TopK}} G_i(x) \, f_i(x)
+$$
+
+### Sub-gradient & Non-differentiability
+
+The **TopK / argmax** operation is non-differentiable:
+
+- Use **straight-through** estimator: forward uses hard TopK, backward uses gradient of soft version.
+
+**Auxiliary loss:** encourage all experts to be used roughly equally:
+
+- penalize variance in routing probabilities across batch.
+- encourages good **load balancing** and stabilizes training.
 
 ## RMSNorm
 
-...
+Standard **LayerNorm**:
 
----
+$$
+\text{LayerNorm}(x) = \frac{x - \mu}{\sigma} \odot \gamma + \beta
+$$
 
-warmup ~ 1/5 training time
+- subtract **mean**,
+- divide by **standard deviation**.
+
+**RMSNorm** (Root-Mean-Square LayerNorm):
+
+$$
+\text{RMSNorm}(x) = \frac{x}{\text{RMS}(x)} \odot \gamma
+$$
+
+where
+
+$$
+\text{RMS}(x) = \sqrt{\frac{1}{d}\sum_{i=1}^d x_i^2 + \epsilon}
+$$
+
+**Intuition:**
+
+- Cheaper and slightly simpler than LayerNorm.
+- Works well for Transformers; often used in recent LLMs (e.g., LLaMA).
+- Stabilizes activations by controlling their norm, without shifting the mean.
+
+## Learning Rate Warmup
+
+Warmup helps to avoid huge gradient steps when weights are random and for optimizers to gather statistics.
+
+Typical scheme:
+
+1. **Warmup phase:**
+   - LR increases linearly from $0$ to $LR_{\text{max}}$ over first $N_{\text{warmup}}$ steps.
+2. **Decay phase:**
+   - afterwards, LR decays (cosine, inverse-sqrt, etc.).
+
+$N_{\text{warmup}} \approx 0.01$–$0.1$ of training steps.
 
 ## Batch Size
 
-`backward` across number of batches $\to$ then once `step`&`zero_grad`. this way we're like having larger batch size (~SGD noise is much smaller) while being restricted on GPU memory.
+![alt text](notes_images/batch_size.png)
 
-...
+### Gradient Accumulation
 
-![alt text](image.png)
+Instead of:
 
-## PEFT
+- batch size = $B$,
+- forward + backward on big batch,
+- one optimizer step.
 
-![alt text](image-3.png)
+We can:
 
-### Prompt-Tuning
+1. Split large batch into $k$ micro-batches of size $B_{\text{micro}}$.
+2. For each micro-batch:
+   - forward
+   - backward (accumulate gradients)
+   - **no** optimizer step, **no** `zero_grad()`.
+3. After $k$ micro-batches:
+   - call `optimizer.step()`
+   - then `optimizer.zero_grad()`.
 
-**Prompt tuning** (or **soft prompting**, **learned prompts**) - extra learned embeddings that are not tied to any actual words in the vocabulary.
+Effective batch size:
 
-So instead of giving the model this sequence:
+$$
+B_{\text{eff}} = k \cdot B_{\text{micro}}
+$$
+
+This **mimics** training with larger batch while staying within memory limits.
+
+## PEFT (Parameter-Efficient Fine-Tuning)
+
+![alt text](notes_images/peft.png)
+
+### Prompt Tuning (Soft Prompts)
+
+**Prompt tuning** = learn **virtual tokens** in the embedding space.
+
+Instead of:
 
 ```css
 [CLS] the movie was great [SEP]
 ```
 
-you give it:
+we feed:
 
 ```css
 [CLS] [P1] [P2] [P3] the movie was great [SEP]
 ```
 
-where `[P1], [P2], [P3]` are learnable vectors — not real words.
+- $[P1], [P2], [P3]$ are **learned vectors**, not real tokens.
+- Base model is frozen; only these embeddings are trained.
 
-...
+Larger models are better at "interpreting" soft prompts.
 
-![alt text](image-1.png)
+![alt text](notes_images/prompt_tuning.png)
 
-the larger the model $\to$ the smarter it is $\to$ the closer prompt-tuning to doing fine-tuning.
+### Prefix Tuning (P-/P-Tuning v2)
 
-### Prefix-Tuning
+Prompt tuning modifies only **input embeddings**.
+
+**Prefix tuning** goes deeper:
+
+- For each layer, we create learnable **prefix K/V vectors** that are prepended to the real sequence in attention.
 
 ### Adapters
 
-...
+**Adapters** are small MLP "bottleneck" modules inserted inside each Transformer block.
 
-![alt text](image-2.png)
+Typical pattern (inside FFN or after attention):
 
-### LoRA
+1. Project from $d_{\text{model}}$ to a **small** dimension $d_{\text{bottle}}$.
+2. Apply nonlinearity.
+3. Project back to $d_{\text{model}}$.
+4. Add as residual.
 
-...
+Mathematically:
+
+$$
+\text{Adapter}(x) = x + W_{\text{up}}\,\sigma(W_{\text{down}} x)
+$$
+
+- $W_{\text{down}}$: $d_{\text{bottle}} \times d_{\text{model}}$
+- $W_{\text{up}}$: $d_{\text{model}} \times d_{\text{bottle}}$
+
+Only adapter weights are trainable; base model is frozen.
+
+![alt text](notes_images/adapter.png)
+
+### LoRA (Low-Rank Adapters)
+
+**LoRA**: instead of updating full weight matrix $W$ (e.g., in attention projections), we add a **low-rank correction**.
+
+Let original weight be $W \in \mathbb{R}^{d_{\text{out}} \times d_{\text{in}}}$.
+
+LoRA parameterization:
+
+$$
+W' = W + \Delta W, \quad \Delta W = B A
+$$
+
+where:
+
+- $A \in \mathbb{R}^{r \times d_{\text{in}}}$,
+- $B \in \mathbb{R}^{d_{\text{out}} \times r}$,
+- $r \ll \min(d_{\text{in}}, d_{\text{out}})$ – **rank**.
+
+Forward pass:
+
+$$
+y = W x + B (A x)
+$$
+
+- Freeze $W$.
+- Train only $A$ and $B$.
+
+Original LoRA paper:
+
+- applied LoRA only to **attention projections** ($W_q, W_k, W_v, W_o$).
+- Later work shows: adapting **FFNs as well** often improves results.
 
 ![alt text](https://i.imgur.com/6bQLNiG.png)
 
-In the original LoRA paper, the adapters were only added to attention projection matrices. However, [subsequent works](https://arxiv.org/abs/2305.14314) show that it is useful to adapt FFNs as well.
-
-# **Seminar 7**
+# **Seminar 7 – Practical PEFT & Tooling**
 
 ## `bitsandbytes`
 
-Just having the line `import bitsandbytes` changes `torch` (needs to be imported _after_): loads CUDA extension and registers quantized ops in PyTorch.
+`bitsandbytes` is a library providing:
 
-## `peft`
+- **8-bit / 4-bit** matrix multiplication kernels,
+- quantized optimizers (e.g., 8-bit Adam),
+- quantized linear layers.
+
+Just having the line import `bitsandbytes` changes `torch` (needs to be imported _after_): loads CUDA extension and registers quantized ops in PyTorch.
+
+## `peft` Library
 
 [peft](https://github.com/huggingface/peft) - Hugging Face library that implements several efficient adaptation methods of PEFT:
 
 - Prompt Tuning
 - Prefix / P-Tuning
-- LoRA
 - Adapters
+- LoRA
 
 All of them modify an _existing_ model minimally by inserting small trainable components instead of updating billions of parameters.
 
-## InstructGPT
+## InstructGPT & RLHF (Connection to PEFT)
 
-...
+**InstructGPT** pipeline (OpenAI, 2022) showed how to align LMs with human intentions:
 
-# **Lecture 8 - ...**
+1. **SFT (Supervised Fine-Tuning)**
+   - Start from base model.
+   - Train on (instruction, response) pairs written by humans.
 
-...
+2. **Reward Model (RM)**
+   - Label **pairs of model responses**: which one is better.
+   - Train a **reward model** $R(x, y)$ to predict human preference.
+
+3. **RL Fine-Tuning (PPO)**
+   - Use the reward model as a proxy reward.
+   - Optimize LM with RL (PPO) so that it generates high-reward answers.
+
+You can implement SFT and even some RLHF-like steps using PEFT methods:
+
+- LoRA on top of a base LLM,
+- reward models also trained with PEFT,
+- much cheaper than full-model fine-tuning.
+
+# **Lecture 8.1 - Acceleration**
+
+## Inference Server
+
+At deployment time, an LLM usually lives behind an **inference server** that acts like a **black box**: receives text (or tokens), returns generated tokens.
+
+### Dynamic batching
+
+Collect several incoming requests & merge them into one bigger batch for GPU efficiency,
+
+- trade-off between **latency** (per-user) and **throughput** (tokens/sec).
+
+### Production-ready Frameworks
+
+- [vLLM](https://docs.vllm.ai/en/latest/)
+  - Efficient KV-cache management via **PagedAttention**.
+  - Continuous batching.
+
+- [Triton Inference Server](https://docs.nvidia.com/deeplearning/triton-inference-server/user-guide/docs/index.html)
+  - Generic serving platform (for many frameworks),
+  - supports multiple backends and dynamic batching.
+
+## KV-Caching
+
+![alt text](notes_images/kv_caching.png)
+
+- Without caching:
+  - each step recomputes all **keys** and **values** for $1 \dots t$,
+
+  - complexity roughly
+    - $O(\text{input\_len}^2 \cdot \text{embed\_size})$ for the prompt,
+    - $O(\text{output\_len}^3 \cdot \text{embed\_size})$ for generation (since each step recomputes all previous states).
+
+- With **KV-caching**:
+  - for each layer/head we store K/V activations for **past tokens**, for a new token we only:
+    - compute its Q/K/V for current step,
+    - attend to the cached K/V.
+
+  - Complexity becomes: $O(\text{input len}^2 \cdot \text{embed size} + \text{output len}^2 \cdot \text{embed size})$
+
+> KV-cache can dominate **memory**, since it scales as $O(\text{layers} \cdot \text{heads} \cdot \text{seq\_len} \cdot d_{\text{head}})$ $\to$ for many concurrent users this becomes a major bottleneck.
+
+## Speculative Decoding
+
+Goal: speed up a **large, expensive model** $L$ using a **smaller, cheaper model** $S$ as a **draft** (proposal) model.
+
+Given a prefix $x$:
+
+1. **Draft step (small model $S$):**
+
+   - Use $S$ to propose a sequence of candidate tokens
+
+     $$
+     y_1, y_2, \dots, y_k = S(x)
+     $$
+
+2. **Verification step (large model $L$):**
+
+   - Run $L$ once on the concatenated prefix:
+
+     $$
+     L(x, y_{1:k-1}) \;\to\; p_L(\cdot \mid x, y_{<i}) \text{ for all } i = 1,\dots,k
+     $$
+
+   - Compare each proposed $y_i$ with $L$’s distribution at position $i$.
+
+   - If, for all $i$,
+
+     $$
+     y_i = \arg\max p_L(\cdot \mid x, y_{<i})
+     $$
+
+     then the sequence is **accepted** and we can jump $k$ steps ahead.
+
+3. **Mismatch handling:**
+
+    - keep $y_1, \dots, y_{i-1}$ (they are accepted), at position $i$ the large model picks its own token (via sampling or argmax),
+
+## Distillation
+
+**Knowledge Distillation**: train a **smaller student** model to imitate a **larger teacher**.
+
+Basic setup for language models:
+
+- Teacher model $T$,
+- Student model $S$ (fewer parameters),
+- Dataset of prompts $x$ (can be real or synthetic),
+- Teacher produces soft targets $p_T(\cdot \mid x)$,
+- Student is trained to match these distributions.
+
+Common loss:
+
+$$
+\mathcal{L}_{\text{KD}} = \sum_{x} \text{KL}\big( p_T(\cdot \mid x; T) \,\|\, p_S(\cdot \mid x; S) \big)
+$$
+
+# **Lecture 8.2 - Model Compression**
+
+## NF4 (NormalFloat4)
+
+NF4 = **Normal Float 4** (4-bit quantization designed for approximately Gaussian weights).
+
+**Idea**:
+
+Assume weights follow approximately **normal distribution**, choose 16 quantization levels such that they are **optimal** (in some sense) for a standard normal, then map real weights to these levels after normalizing.
+
+## Uniform Quantization
+
+1. Choose scale $\text{scale}$ and zero-point $z$.
+
+2. Quantize:
+
+   $$
+   q = \text{clamp}\big(\text{round}(x / \text{scale}) + z, q_{\min}, q_{\max}\big)
+   $$
+
+3. Dequantize:
+
+   $$
+   \hat{x} = \text{scale} \cdot (q - z)
+   $$
+
+We store only integer $q$ (e.g. 4-bit or 8-bit), plus per-tensor/per-group **scale** and **zero-point**.
+
+> In LLM inference we usually store weights in 4/8 bits, but compute in higher precision (FP16/BF16) after **on-the-fly dequantization**.
+
+## Round-To-Nearest (RTN) Quantization
+
+Simplest scheme:
+
+- For each tensor (or per-row, per-channel):
+
+  1. Estimate min/max or some range for $x$.
+  2. Set
+
+     $$
+     \text{scale} = \frac{x_{\max} - x_{\min}}{2^b - 1}
+     $$
+
+  3. Quantize via round-to-nearest:
+
+     $$
+     q = \text{round}\left(\frac{x - x_{\min}}{\text{scale}}\right)
+     $$
+
+- This is **range-based, non-data-aware**:
+  - does not consider how errors affect outputs,
+  - but is extremely simple and fast.
+
+Often used as a baseline: "RTN 4-bit" / "RTN 8-bit".
+
+## LLM.int8(): Some Weights Are More Important
+
+Observation:
+
+- Most weights/activations are small and can be quantized aggressively.
+- A small subset of **outliers** has much larger magnitude; quantizing them naively hurts quality.
+
+LLM.int8() style approach:
+
+- Split activations into:
+  - **non-outlier** part: stored in int8,
+  - **outlier** part: stored in higher precision (e.g. FP16).
+- During matmul:
+  - compute int8 part using int8 GEMM,
+  - add contribution from outlier part in FP16.
+
+Result:
+
+- Effective 8-bit runtime with small overhead,
+- better quality than pure uniform int8 quantization.
+
+Similar ideas appear in many 8-bit and 4-bit schemes: isolate outliers in a separate path.
+
+## [Extreme Compression of Large Language Models via Additive Quantization](https://arxiv.org/abs/2401.06118)
+
+Instead of a **single** low-bit code per weight, represent each weight as a **sum of several codewords** from small codebooks.
+
+- For example, 2-bit per codeword but multiple codebooks:
+
+  $$
+  w \approx c_1(i_1) + c_2(i_2) + \dots + c_M(i_M)
+  $$
+
+- Together this can approximate weights very well with **extremely low bits per weight** (e.g. effective 2 bits).
+
+> It is often better to take a **larger model** and quantize it more aggressively (e.g. to 2 bits) than to use a **smaller model** quantized more softly (e.g. 4 bits).
+
+## GPTQ
+
+GPTQ - **post-training quantization** method that is **weight-aware and data-aware**.
+
+> GPTQ considers the **impact on outputs / activations**, not just weight values.
+
+We want to quantize weight matrix $W \in \mathbb{R}^{d_{\text{out}} \times d_{\text{in}}}$ to $W_q$, given some layer input **calibration data** $X$, we care about the error:
+
+$$
+\| X (W - W_q) \|_2^2 \to \min
+$$
+
+1. Compute statistics on $X$ to estimate curvature (e.g. $X^\top X$).
+2. For each weight (or column) in some order:
+   - find quantized value that minimizes local quadratic error,
+   - update residual / error term.
+3. Store quantized weights and scales.
+
+### SparseGPT
+
+SparseGPT uses a similar **second-order objective** but for **pruning**:
+
+- Instead of mapping weights to discrete quantized levels, we map many of them to **zero**.
+- Objective:
+
+  $$
+  \| X (W - W_{\text{pruned}}) \|_2^2
+  $$
+
+# **Lecture 9 – RAG (Retrieval-Augmented Generation)**
+
+## IR (Information Retrieval) Metrics
+
+### 1. Precision@k
+
+$$
+\text{Precision@k} = \frac{\#\{\text{relevant documents in top-}k\}}{k}
+$$
+
+### 2. Recall@k
+
+$$
+\text{Recall@k} = \frac{\#\{\text{relevant documents retrieved in top-}k\}}{\#\{\text{relevant documents in corpus}\}}
+$$
+
+Measures **coverage**: whether we found all important pieces.
+
+### 3. MRR (Mean Reciprocal Rank)
+
+Look at the **rank of the first relevant document**:
+
+$$
+\text{MRR} = \frac{1}{N} \sum_{i=1}^N \frac{1}{\text{rank}_i}
+$$
+
+- If relevant document appears at rank 1 $\to$ contribution is 1.
+- At rank 10 $\to$ $1/10$.
+
+### 4. NDCG@k (Normalized Discounted Cumulative Gain)
+
+Handles **graded** relevance (document may be slightly relevant or strongly relevant).
+
+1. Compute DCG:
+
+    $$
+    \text{DCG@k} = \sum_{i=1}^{k} \frac{rel_i}{\log_2(i + 1)}
+    $$
+
+2. Normalize by the ideal ordering (IDCG@k):
+
+    $$
+    \text{NDCG@k} = \frac{\text{DCG@k}}{\text{IDCG@k}}
+    $$
+
+Values between 0 and 1.  
+Measures **ranking quality** of top-k results.
+
+## RAG (Retrieval-Augmented Generation)
+
+![alt text](notes_images/rag_pipeline.png)
+
+Stages:
+
+1. **Retriever:** finds relevant chunks from a large corpus.
+2. **Generator (LLM):** uses retrieved context to craft final answer.
+
+### "Lost in the Middle" (2023)
+
+Large LLMs ignore content in the **middle** of large prompt windows.
+
+![alt text](notes_images/rag_lost_in_the_middle.png)
+
+$\to$ reranking, chunking strategy, and context ordering matter a lot.
+
+### 1. Joint RAG
+
+Single model trained end-to-end:
+
+- theoretical advantage: one loss directly trains everything,
+- practical issues:
+  - huge training cost,
+  - less modularity,
+  - difficult to scale / debug / swap components.
+
+$\to$ not used much now.
+
+### 2. Modular RAG (current standard)
+
+- retriever: BM25, dense embeddings, hybrids,
+
+- generator: any LLM,
+
+## RAG 101 – Training the Retriever
+
+Goal: train vector encoders $V_q$ and $V_a$ that map:
+
+- query $\to$ dense vector
+
+- document/chunk (answer) $\to$ dense vector
+
+So that **relevant** pairs have high similarity.
+
+### 1. Contrastive (Siamese) Loss
+
+Basic idea:
+
+- maximize similarity between $(q, a^+)$,
+- minimize similarity between $(q, a^-)$.
+
+Several forms exist (cosine contrastive, InfoNCE, ranking losses).
+
+### 2. Triplet Loss (Pairwise Hinge Loss)
+
+Most common in RAG literature.
+
+$$
+L = \frac{1}{N} \sum_{q, a^+, a^-}
+\max \big( 0,\;
+\delta - sim[V_q(q), V_a(a^+)]
++ sim[V_q(q), V_a(a^-)]
+\big)
+$$
+
+- $sim[\cdot,\cdot]$ – dot product, cosine, or negative Euclidean distance.
+- $\delta$ – margin, e.g., $\delta = 1.0$.
+
+Interpretation: positive document $a^+$ should be at least $\delta$ more similar than negative $a^-$.
+
+![alt text](notes_images/triplot_loss.png)
+
+## Advanced RAG
+
+RAG is really two systems:
+
+1. **Pre-retrieval**: maximize recall (holding precision)
+
+2. **Post-retrieval**: maximize precision (holding recall)
+
+### 1. Pre-Retrieval (Query Expansion / Rewriting)
+
+- Query Rewriting via LLM:
+  - clarify the question,
+  - add synonyms, keywords, entity disambiguation.
+
+- Query Decomposition
+  - break long complex query into sub-questions.
+
+- **Hierarchical Indexing**:
+  - store:
+    - document-level summary,
+    - paragraph summaries,
+    - fine-grained chunk representations.
+
+- **Multi-representation Indexing**:
+  - for each document create:
+    1. the full chunk,
+    2. a summary,
+    3. "potential questions" generated by LLM,
+
+  This **works extremely well**, captures many paraphrases.
+
+### 2. Retrieval
+
+1. Run BM25 ranking $\to$ take top–k.
+2. Run dense embedding retrieval $\to$ take top–k.
+3. Merge results $\to$ rerank.
+
+### 3. Post-Retrieval (Reranking)
+
+- **Cross-encoders**:
+  - LLM / Transformer that reads (query, chunk) jointly,
+  - gives precise relevance score.
+
+- LLM **reranking**:
+  - Prompt LLM: "Which of these chunks answer the question best?"
+  - Works surprisingly well.
+
+## RAG++ Paradigms
+
+### Self-RAG
+
+Loop:
+
+1. Retrieve $\to$ answer
+2. Evaluate answer (self-critique)
+3. Retrieve missing facts
+4. Refine answer
+
+### Graph RAG
+
+Build a **knowledge graph** from the corpus:
+
+- nodes = entities or concepts,
+- edges = relationships,
+- retrieval becomes **graph traversal** + embedding search.
+
+### Agentic RAG
+
+Instead of one-shot retrieval use an **agent**:
+
+- decide when to retrieve,
+- how many times,
+- which tool to call (search, summarizer, SQL),
+- how to combine results.
+
+Pipeline becomes dynamic:
+
+- decision-making loop,
+- retrieval $\to$ reasoning $\to$ retrieval $\to$ reasoning,
+- resembles how humans research information.
+
+# **Lecture 10 - Agents**
+
+| Agency Level | Description                                               | Short name          | Example Code                                   |
+|--------------|-----------------------------------------------------------|----------------------|------------------------------------------------|
+| ☆☆☆          | LLM output has no impact on program flow                  | Simple processor     | `process_llm_output(llm_response)`             |
+| ★☆☆          | LLM output controls an if/else switch                     | Router               | `if llm_decision(): path_a() else: path_b()`   |
+| ★★☆          | LLM output controls function execution                     | Tool call            | `run_function(llm_chosen_tool, llm_chosen_args)` |
+| ★★★          | LLM output controls iteration and program continuation    | Multi-step Agent     | `while llm_should_continue(): execute_next_step()` |
+| ★★★         | One agentic workflow can start another agentic workflow   | Multi-Agent          | `if llm_trigger(): execute_agent()`            |
+| ★★★        | LLM acts in code, can define its own tools / start agents | Code Agents          | `def custom_tool(args): ...`                   |
+
+## Agents as Stochastic Policies Over Latent Cognitive States
+
+At the scientific level, an LLM agent is a system with:
+
+- **State space** $ \mathcal{S} $
+- **Action space** $ \mathcal{A} $
+- **Observation space** $ \mathcal{O} $
+- **Transition operator** $ \mathcal{T} $
+- **Policy** $ \pi $ parameterized by an LLM
+- **External memory** $ M $
+- **Tool semantics** $ \Phi $
+
+Fundamentally:
+
+$$
+\pi_\theta(a_t \mid h_t) = \text{LLM}_\theta(\text{context } h_t)
+$$
+
+with history:
+
+$$
+h_t = (o_0, a_0, o_1, ..., o_t)
+$$
+
+This is **not Markovian**; it is a *history-conditioned stochastic policy*.
+
+> LLM policies violate the Markov assumption, the stationarity assumption, and the independence assumptions needed for classical RL and POMDP control.
+
+$\to$ LLM agents operate in a **highly non-Markovian, non-stationary, history-entangled POMDP**.
+
+LLM acts like a **latent dynamics predictor**, but with no explicit transition model $\to$ world models are **implicit** inside the transformer's weights.
+
+## Tool Execution as Environment Transitions
+
+Let’s define an environment:
+
+$$
+E = (\mathcal{S}, \mathcal{A}, \mathcal{O}, T, O)
+$$
+
+where:
+
+- state transitions happen **outside** the LLM
+- observations feed **into** the LLM
+- actions come **out** of the LLM
+
+The agent loop:
+
+$$
+o_t = O(s_t)
+$$
+$$
+a_t \sim \pi_\theta(\cdot \mid h_t)
+$$
+$$
+s_{t+1} \sim T(s_t, a_t)
+$$
+$$
+o_{t+1} = O(s_{t+1})
+$$
+
+**Key scientific problem:**  
+The LLM does **not** observe true state.  
+It observes a **lossy textual summary**.
+
+This creates a **compression bottleneck**:
+
+$$
+I(s_t; o_t) \ll I(s_t; \text{full environment})
+$$
+
+So the LLM agent is controlling a system with **huge partial observability**.
+
+## MCP (Anthropic)
+
+**MCP (Model Context Protocol)** - vendor-agnostic, language-agnostic, bidirectional JSON-RPC protocol built on WebSockets, invented by Anthropic to standardize tool invocation.
+
+1. Creates a WebSocket server
+
+2. Registers:
+
+    - tools (name, description, argument specs)
+    - resources
+    - prompts
+
+3. On connection:
+
+    - sends capabilities
+    - responds to tools/list, resources/list
+
+4. On tool invocation:
+
+    1. validates JSON schema
+    2. calls Python function
+    3. sends results of execution
+
+```py
+from mcp.server.fastmcp import FastMCP
+
+
+mcp = FastMCP()
+
+
+@mcp.tool()
+def add(x: int, y: int) -> int:
+    return x + y
+
+
+@mcp.resource("file", pattern="*")  # persistent data
+def read_file(path: str) -> str:
+    with open(path) as f:
+        return f.read()
+
+
+@mcp.prompt("hello")
+def hello_prompt():
+    return "You are a helpful assistant."
+
+
+if __name__ == "__main__":
+    mcp.run()
+```
+
+## [Toolformer](https://arxiv.org/abs/2302.04761)
+
+## APIGen
+
+### **APIGen-MT**
+
+## ToolAce
+
+## [ReAct](https://arxiv.org/abs/2210.03629)
+
+A loop where the LLM:
+
+1. Reasons (internal reasoning step)
+
+2. Acts (executes a tool)
+
+3. Observes (receives feedback from the environment)
+
+### CodeAct
+
+## Training Agents: AgentFlow & FlowGRPO
