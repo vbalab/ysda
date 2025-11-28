@@ -862,7 +862,7 @@ $$
 
 Task: make the **model distribution** $ p_\theta(x) $ approximate the **true data distribution** $ p_{\text{data}}(x) $.
 
-- How do we measure the “distance” between two distributions?
+- How do we measure the "distance" between two distributions?
 
 ### 1 Total Variation Distance (TVD)
 
@@ -926,7 +926,7 @@ $$
 - Leads to **Wasserstein GAN (WGAN)** with stable training and meaningful gradients.
 
 | Metric | Symmetric | Finite if supports disjoint? | Smooth Gradients? | Common use |
-|--------|-----------|------------------------------|--------------------|------------|
+|--|--||--||
 | TVD    | ✅        | ❌                           | ❌                 | Theory     |
 | KL     | ❌        | ❌                           | 🚫 (p,q unstable) | MLE, VAEs  |
 | JS     | ✅        | ✅                           | 🚫 (vanishes)      | Vanilla GAN |
@@ -1254,7 +1254,7 @@ p_\theta(x) = \frac{\hat{p}_\theta(x)}{Z_\theta},
 Z_\theta = \int \hat{p}_\theta(x)\, dx
 $$
 
-If we reparameterize as $ \hat{p}_\theta(x) = \exp(-f_\theta(x)),$ we eliminate the non-negativity constraint.
+Easy choice: $ \hat{p}_\theta(x) = \exp(-f_\theta(x))$.
 
 #### **Gradient**
 
@@ -1270,7 +1270,7 @@ $$
     \nabla_x \log \hat{p}_\theta(x)
 $$
 
-> Note, that the gradient is taken with respect to $x$, not $\theta$.
+- Note, that the gradient is taken with respect to $x$, not $\theta$.
 
 ## Langevin Dynamics
 
@@ -1606,10 +1606,8 @@ $$
     q(x_t \mid x_0)
     =
     \mathcal{N}(\sqrt{\bar{\alpha}_t} x_0,\,
-    (1 - \bar{\alpha}_t) I)
-    $$
-
-    $$
+    (1 - \bar{\alpha}_t) I),
+    \qquad
     q(x_1) \approx p_{\text{data}}(x),
     \qquad
     q(x_T) \approx \mathcal{N}(0, I)
@@ -1638,6 +1636,520 @@ If $ \beta_t $ is sufficiently small $\to$ $ q(x_{t-1} \mid x_t) $ is **Gaussian
 
 > That's why diffusion requires $ T \approx 1000 $ steps for convergence
 
-# **Lecture 8 - ...**
+# **Lecture 8 - DDPM**
 
-don't do diffusion as VAE, слишком навязано, по-моему - **бля надо походу, там ELBo выводится, хз, подумай еще**
+## Forward & Reverse Processes
+
+### Forward Processes
+
+1. $\mathbf{x}_0 = \mathbf{x} \sim p_{\text{data}}(\mathbf{x})$;
+
+2. $$
+    \mathbf{x}_t
+    = \sqrt{1 - \beta_t}\,\mathbf{x}_{t-1}
+    + \sqrt{\beta_t}\,\epsilon,
+    \quad \epsilon \sim \mathcal{N}(0,I);
+    $$
+
+3. $\mathbf{x}_T \sim p_\infty(\mathbf{x}) = \mathcal{N}(0,I)$.
+
+### Reverse Processes
+
+1. $\mathbf{x}_T \sim p_\infty(\mathbf{x}) = \mathcal{N}(0,I)$;
+
+2. $$
+    \mathbf{x}_{t-1}
+    = \sigma_{\theta,t}(\mathbf{x}_t)\cdot \epsilon + \mu_{\theta,t}(\mathbf{x}_t),
+    \quad \epsilon \sim \mathcal{N}(0,I);
+    $$
+
+3. $\mathbf{x}_0 = \mathbf{x} \sim p_{\text{data}}(\mathbf{x})$.
+
+## Conditioned Reverse Distribution
+
+### Reverse Kernel (**Intractable**)
+
+$$
+q(x_{t-1}\mid x_t) = \frac{q(x_t \mid x_{t-1})\, q(x_{t-1})}{q(x_t)}
+$$
+
+### Conditioned Reverse Kernel (**Tractable**)
+
+$$
+q(x_{t-1} \mid x_t, x_0)
+= \frac{ q(x_t \mid x_{t-1}, x_0)\, q(x_{t-1}\mid x_0) }
+        { q(x_t \mid x_0) }
+$$
+
+$$
+= \frac{
+\mathcal{N}(\sqrt{1-\beta_t}\, x_{t-1}, \beta_t I)
+\cdot
+\mathcal{N}(\sqrt{\bar{\alpha}_{t-1}}\, x_0, (1-\bar{\alpha}_{t-1})\, I)
+}{
+\mathcal{N}(\sqrt{\bar{\alpha}_t}\, x_0, (1-\bar{\alpha}_t)\, I)
+}
+$$
+
+$$
+= \mathcal{N}(\tilde{\mu}_t(x_t, x_0),\, \tilde{\beta}_t \cdot I)
+$$
+
+Here,
+$$
+\tilde{\mu}_t(x_t, x_0)
+= \frac{\sqrt{\alpha_t}(1-\bar{\alpha}_{t-1})}{1-\bar{\alpha}_t}\, x_t + \frac{\sqrt{\bar{\alpha}_{t-1}}(1-\alpha_t)}{1-\bar{\alpha}_t}\, x_0
+$$
+
+$$
+\tilde{\beta}_t
+= \frac{(1-\alpha_t)(1-\bar{\alpha}_{t-1})}{1-\bar{\alpha}_t}
+= \text{const.}
+$$
+
+## Distribution Summary
+
+**Forward process**:
+
+$$
+q(x_t \mid x_{t-1}) = \mathcal{N}(\sqrt{1-\beta_t}\, x_{t-1}, \beta_t I)
+$$
+
+$$
+q(x_t \mid x_0) = \mathcal{N}(\sqrt{\bar{\alpha}_t}\, x_0, (1-\bar{\alpha}_t) I)
+$$
+
+**Reverse process**:
+
+$$
+q(x_{t-1}\mid x_t)
+= \frac{q(x_t\mid x_{t-1})\, q(x_{t-1})}{q(x_t)}
+\approx \mathcal{N}\left( \mu_{\theta,t}(x_t),\, \sigma_{\theta,t}^2(x_t) \right)
+$$
+
+**Conditioned reverse process**:
+
+$$
+q(x_{t-1} \mid x_t, x_0) =
+\mathcal{N}\left( \tilde{\mu}_t(x_t, x_0),\, \tilde{\beta}_t I \right)
+$$
+
+## Loss
+
+### ELBO
+
+$$
+\log p_\theta(x)
+\ge \mathbb{E}_{q(x_{1:T}\mid x_0)}
+\log \frac{p_\theta(x_0, x_{1:T})}{q(x_{1:T}\mid x_0)}
+= \mathbb{E}_{q(x_{1:T}\mid x_0)}
+\log
+\frac{
+p(x_T) \prod_{t=1}^T p_\theta(x_{t-1}\mid x_t)
+}{
+\prod_{t=1}^T q(x_t\mid x_{t-1})
+}
+= \mathcal{L}_{\phi,\theta}(x)
+\to \max_{q,\theta}
+$$
+
+$$
+\mathcal{L}_{\phi,\theta}(x)
+= \mathbb{E}_{q(x_1\mid x_0)} \log p_\theta(x_0\mid x_1) - \mathrm{KL}( q(x_T\mid x_0) \,\|\, p(x_T)) - \sum_{t=2}^T
+\underbrace{
+\mathbb{E}_{q(x_t\mid x_0)}
+\mathrm{KL}\big( q(x_{t-1}\mid x_t, x_0) \,\|\, p_\theta(x_{t-1}\mid x_t) \big)}_{\mathcal{L}_t}
+$$
+
+- **First term** - the decoder distribution
+
+- **Second term** - constant
+
+- **Third term** - the main contributor to the ELBO
+
+### Reparametrization
+
+$$
+q(x_{t-1}\mid x_t, x_0)
+= \mathcal{N}\!\big( x_{t-1} \mid \tilde{\mu}_t(x_t,x_0),\, \tilde{\beta}_t I \big),
+$$
+
+$$
+p_\theta(x_{t-1}\mid x_t)
+= \mathcal{N}\!\big( x_{t-1} \mid \mu_{\theta,t}(x_t),\, \sigma^2_{\theta,t}(x_t) I \big)
+$$
+
+Then:
+
+$$
+\mathcal{L}_t
+= \mathbb{E}_{q(x_t\mid x_0)}
+\mathrm{KL}\!\left( q(x_{t-1}\mid x_t, x_0) \,\|\, p_\theta(x_{t-1}\mid x_t) \right)
+$$
+
+$$
+
+= \mathbb{E}_{q(x_t\mid x_0)}
+\mathrm{KL}\!\left(
+\mathcal{N}(\tilde{\mu}_t(x_t,x_0), \tilde{\beta}_t I)
+\;\|\;
+\mathcal{N}(\mu_{\theta,t}(x_t), \tilde{\beta}_t I)
+\right)
+$$
+
+$$
+= \mathbb{E}_{q(x_t\mid x_0)}
+\left[
+\frac{1}{2\tilde{\beta}_t}
+\left\|\tilde{\mu}_t(x_t,x_0) - \mu_{\theta,t}(x_t)\right\|^2
+\right]
+$$
+
+$$
+= \mathbb{E}_{\epsilon \sim \mathcal{N}(0,I)}
+\left[
+\frac{(1-\alpha_t)^2}{2\tilde{\beta}_t\, \alpha_t (1-\bar{\alpha}_t)}
+\left\|
+\epsilon - \epsilon_{\theta,t}(x_t)
+\right\|^2
+\right]
+$$
+
+$$
+= \mathbb{E}_{\epsilon\sim\mathcal{N}(0,I)}
+\left[
+\frac{(1-\alpha_t)^2}{2\tilde{\beta}_t\, \alpha_t (1-\bar{\alpha}_t)}
+\left\|
+\epsilon - \epsilon_{\theta,t}\big( \sqrt{\bar{\alpha}_t}\, x_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon \big)
+\right\|^2
+\right]
+$$
+
+### Simplified Objective
+
+$$
+\mathcal{L}_{\text{simple}}
+= \mathbb{E}_{t \sim U\{2,T\}}
+\mathbb{E}_{\epsilon\sim\mathcal{N}(0,I)}
+\left\|
+\epsilon -
+\epsilon_{\theta,t}\big( \sqrt{\bar{\alpha}_t}\, x_0 + \sqrt{1-\bar{\alpha}_t}\, \epsilon \big)
+\right\|^2
+$$
+
+## DDPM (Denoising Diffusion Probabilistic Model)
+
+### Training
+
+1. Obtain a sample $\mathbf{x}_0 \sim p_{\text{data}}(\mathbf{x})$.
+
+2. Sample time index $t \sim U\{1, T\}$ and noise $\epsilon \sim \mathcal{N}(0,I)$.
+
+3. Generate noisy image  
+    $$
+    \mathbf{x}_t = \sqrt{\bar{\alpha}_t}\,\mathbf{x}_0 + \sqrt{1-\bar{\alpha}_t}\,\epsilon.
+    $$
+
+4. Compute the loss  
+    $$
+    \mathcal{L}_{\text{simple}} = \|\epsilon - \epsilon_{\theta,t}(\mathbf{x}_t)\|^2.
+    $$
+
+### Sampling (Ancestral Sampling)
+
+1. Sample $\mathbf{x}_T \sim \mathcal{N}(0,I)$.
+
+2. Compute:
+    $$
+    \mu_{\theta,t}(\mathbf{x}_t)
+    = \frac{1}{\sqrt{\alpha_t}}\,\mathbf{x}_t - \frac{1-\alpha_t}{\sqrt{\alpha_t(1-\bar{\alpha}_t)}}\,
+    \epsilon_{\theta,t}(\mathbf{x}_t).
+    $$
+
+3. Denoise:
+    $$
+    \mathbf{x}_{t-1}
+    = \mu_{\theta,t}(\mathbf{x}_t) + \sqrt{\tilde{\beta}_t}\,\epsilon,
+    \quad \epsilon \sim \mathcal{N}(0,I).
+    $$
+
+# **Lecture 9.1 - Guidance**
+
+## DDPM as a Score-Based Generative Model
+
+### DDPM $\to$ Score-Based
+
+The forward noising process is:
+
+$$
+q(x_t \mid x_0) = \mathcal{N}\!\left( \sqrt{\bar{\alpha}_t}\, x_0,\; (1-\bar{\alpha}_t)\, I \right)
+$$
+
+The score of the forward process:
+
+$$
+\nabla_{x_t} \log q(x_t \mid x_0)
+= - \frac{x_t - \sqrt{\bar{\alpha}_t} \, x_0}{1 - \bar{\alpha}_t}
+= - \frac{\varepsilon}{\sqrt{1-\bar{\alpha}_t}}.
+$$
+
+We reparameterize the model as:
+
+$$
+s_{\theta,t}(x_t)
+= -\, \frac{\varepsilon_{\theta,t}(x_t)}{\sqrt{1-\bar{\alpha}_t}}
+= \nabla_{x_t} \log p_\theta(x_t).
+$$
+
+Loss:
+
+$$
+\mathcal{L}_t
+= \mathbb{E}_{q(x_t \mid x_0)}
+\Bigg[
+\frac{(1-\alpha_t)^2}{2 \tilde{\beta}_t \alpha_t}
+\left\| s_{\theta,t}(x_t) - \nabla_{x_t} \log q(x_t \mid x_0) \right\|_2^2
+\Bigg].
+$$
+
+### DDPM vs NCSN: Objectives
+
+#### **DDPM Objective**
+
+$$
+\mathbb{E}_{p_\text{data}(x_0)}
+\mathbb{E}_{t \sim U\{1,T\}}
+\mathbb{E}_{q(x_t \mid x_0)}
+\Bigg[
+\frac{(1 - \alpha_t)^2}{2 \tilde{\beta}_t \alpha_t}
+\left\| s_{\theta,t}(x_t) - \nabla_{x_t}\log q(x_t \mid x_0) \right\|_2^2
+\Bigg]
+$$
+
+with
+
+$$
+x_t = \sqrt{\bar{\alpha}_t}\, x_0 + \sqrt{1-\bar{\alpha}_t}\, \varepsilon.
+$$
+
+#### **NCSN Objective**
+
+$$
+\mathbb{E}_{p_\text{data}(x_0)}
+\mathbb{E}_{t \sim U\{1,T\}}
+\mathbb{E}_{q(x_t \mid x_0)}
+\left\|
+s_{\theta,\sigma_t}(x_t) - \nabla_{x_t} \log q(x_t \mid x_0)
+\right\|_2^2
+$$
+
+with
+
+$$
+x_t = x_0 + \sigma_t \varepsilon.
+$$
+
+> Maximizing the ELBO leads to the same objective as denoising score matching!
+
+### Summary
+
+- Different Markov chains:
+  - DDPM:
+    $ x_t = \sqrt{\bar{\alpha}_t}\, x_0 + \sqrt{1-\bar{\alpha}_t}\, \varepsilon $
+  - NCSN:  
+    $ x_t = x_0 + \sigma_t \varepsilon $
+
+- Different sampling:
+  - DDPM: Ancestral sampling  
+  - NCSN: Annealed Langevin dynamics
+
+- $\mathcal{L}_t$ coincide: ELBO $\equiv$ score matching.
+
+## 1. Classifier Guidence
+
+### Guided Score Function
+
+$$
+x_{t-1}
+= \frac{1}{\sqrt{1-\beta_t}}\, x_t + \frac{\beta_t}{\sqrt{1-\beta_t}} \cdot \nabla_{x_t} \log p_\theta(x_t \mid \textcolor{blue}{y}) + \sigma_t \cdot \varepsilon
+$$
+
+Where
+
+$$
+s_{\theta,t}(x_t, y) =
+$$
+
+$$
+= \nabla_{x_t} \log p_\theta(x_t \mid y)
+= \nabla_{x_t} \log p_\theta(x_t) + \nabla_{x_t} \log p(y \mid x_t)
+$$
+
+$$
+= s_{\theta,t}(x_t) + \nabla_{x_t} \log p(y \mid x_t)
+$$
+
+### Guidance Scale
+
+$$
+s^\gamma_{\theta,t}(x_t, y)
+= s_{\theta,t}(x_t) + \gamma \cdot \nabla_{x_t} \log p(y \mid x_t)
+$$
+
+- The **guidance scale** $ \gamma $ adjusts the strength of classifier guidance.
+
+- $ s^\gamma_{\theta,t}(x_t, y) $ is _not_ the true guided score function $ s_{\theta,t}(x_t, y) $.
+
+### Scaled Guided Score
+
+$$
+\nabla^{\gamma}_{x_t} \log p_\theta(x_t \mid y)
+= \nabla_{x_t} \log p_\theta(x_t) + \gamma \cdot \nabla_{x_t} \log p(y \mid x_t)
+$$
+
+$$
+= \nabla_{x_t} \log p_\theta(x_t) + \nabla_{x_t} \log p(y \mid x_t)^\gamma
+$$
+
+$$
+= \nabla_{x_t} \log \left(
+\frac{p_\theta(x_t)\, p(y \mid x_t)^\gamma}{Z}
+\right)
+$$
+
+$\to$ Increasing $ \gamma $ sharpens $ p(y \mid x_t) $, making it more **contrastive**.
+
+### Training
+
+$$
+x_{t-1}
+= \frac{1}{\sqrt{\alpha_t}}\, x_t + \frac{\beta_t}{\sqrt{1-\beta_t}} \cdot s^\gamma_{\theta,t}(x_t, y) + \sigma_t \cdot \varepsilon
+$$
+
+- Train the DDPM as before.
+
+- Train an additional **classifier** $ p(y \mid x_t) $ on noisy data  
+  (note that it is dependent on time $ t $).
+
+## 2. Classifier-free Guidence
+
+$$
+\nabla^{\gamma}_{x_t} \log p_\theta(x_t \mid y)
+= \nabla_{x_t} \log p_\theta(x_t) + \gamma \cdot \nabla_{x_t} \log p(y \mid x_t)
+$$
+
+$$
+= \nabla_{x_t} \log p_\theta(x_t) + \gamma \cdot \left( \nabla_{x_t} \log p_\theta(x_t \mid y) - \nabla_{x_t} \log p_\theta(x_t) \right)
+$$
+
+$$
+= (1 - \gamma)\, \nabla_{x_t} \log p_\theta(x_t) + \gamma \, \nabla_{x_t} \log p_\theta(x_t \mid y)
+$$
+
+Thus,
+
+$$
+s^\gamma_{\theta,t}(x_t, y)
+= (1-\gamma)\, s_{\theta,t}(x_t) + \gamma \, s_{\theta,t}(x_t, y)
+$$
+
+### Naive training approach
+
+- Train an **unguided** score function model $ s_{\theta,t}(x_t) $.
+
+- Train a **guided** score function model $ s_{\theta,t}(x_t, y) $.
+
+- Use their convex combination at inference.
+
+### CFG algorithm
+
+Introduce the **"absence of conditioning"** label $ y = \varnothing $.
+
+Use it to get unguided score function $ s_{\theta,t}(x_t) = s_{\theta,t}(x_t, \varnothing) $.
+
+- Train a _single_ model $ s_{\theta,t}(x_t, y) $ using **supervised** data, but artificially drop labels $y$ with some fixed probability (simulating the case $ y = \varnothing $).
+
+- Apply the model **twice during inference** to get:  
+  - $ s_{\theta,t}(x_t, \varnothing) $ (unguided)  
+  - $ s_{\theta,t}(x_t, y) $ (guided)
+
+# **Lecture 9.2 - Continuous-Time Normalizing Flows**
+
+## Continuous-Time Dynamics
+
+Consider an Ordinary Differential Equation (ODE):
+
+$$
+\frac{d x(t)}{d t} = f_\theta(x(t), t),
+\qquad x(t_0) = x_0.
+$$
+
+$$
+x(t_1) = \int_{t_0}^{t_1} f_\theta(x(t), t)\, dt + x_0
+$$
+
+Here, $ f_\theta : \mathbb{R}^m \times [t_0, t_1] \to \mathbb{R}^m $ is a **vector field**.
+
+## Flow
+
+Let us call **the flow** $ \psi : \mathbb{R}^m \times [t_0, t_1] \to \mathbb{R}^m $ the solution of the ODE:
+
+$$
+\frac{d}{dt} \psi_t(x_0)
+= f_\theta(\psi_t(x_0), t),
+\qquad \psi_0(x_0) = x_0.
+$$
+
+## Numerical Solution of ODEs
+
+$$
+\psi_t(x_0)
+= \int_{t_0}^{t_1} f_\theta(x(t), t)\, dt + x_0
+\;\approx\;
+\mathrm{ODESolve}_f(x_0, \theta, t_0, t_1).
+$$
+
+### Euler Update Step
+
+$$
+x(t+h)
+= x(t) + h \cdot f_\theta(x(t), t)
+$$
+
+### Heun’s Update Step
+
+$$
+x(t+h)
+= x(t) + \frac{h}{2} \Big( f_\theta(x(t), t) + f_\theta(x'(t+h), t+h) \Big)
+$$
+
+![alt text](notes_images/hein_update_step.png)
+
+## Probability Path
+
+$ p_t(x) = p(x, t) $ describes the **probability path** interpolating between $ p_0(x) $ and $ p_1(x) $.
+
+## Theorem (Picard)
+
+If $ f $ is continuously differentiable with a bounded derivative in $ x $ and continuous in $ t $, then the ODE has a **unique solution** giving a flow $ \psi_t $.
+
+This guarantees the ODE is **uniquely reversible**.
+
+$$
+\psi_1(x_0)
+= x_0 + \int_0^1 f_\theta(\psi_t(x_0), t)\, dt
+$$
+
+$$
+x(1)
+= x(0) + \int_0^1 f_\theta(x(t), t)\, dt
+$$
+
+$$
+x(0)
+= x(1) + \int_1^0 f_\theta(x(t), t)\, dt
+$$
+
+> Unlike discrete-time flows, $ f $ **need not be invertible** (uniqueness ensures bijection).
+
+# **Lecture 10 - ...**
