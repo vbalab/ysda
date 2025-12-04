@@ -1445,6 +1445,8 @@ $$
     \epsilon_l \sim \mathcal{N}(0, I).
 $$
 
+![alt text](notes_images/score_matching.png)
+
 ## NCSN (Noise-Conditioned Score Network)
 
 #### **Problem**
@@ -1873,7 +1875,7 @@ $$
     \quad \epsilon \sim \mathcal{N}(0,I).
     $$
 
-# **Lecture 9.1 - Guidance**
+# **Lecture 9.1 - DDPM Guidance**
 
 ## DDPM as a Score-Based Generative Model
 
@@ -2152,4 +2154,139 @@ $$
 
 > Unlike discrete-time flows, $ f $ **need not be invertible** (uniqueness ensures bijection).
 
-# **Lecture 10 - ...**
+# **Lecture 10 - SDE & ODE**
+
+## Continuity Equation for NF Log-Likelihood
+
+### Theorem (Continuity Equation)
+
+If $f$ is uniformly **Lipschitz continuous** in $x$ and continuous in $t$, then
+
+$$
+\frac{d \log p_t(x(t))}{dt}
+= - \operatorname{tr}\!\left(
+\frac{\partial f(x(t), t)}{\partial x(t)}
+\right)
+$$
+
+$\to$ given $x_0 = x(0)$, the solution to the continuity equation gives the density $p_1(x(1))$.
+
+#### Solution of the Continuity Equation
+
+$$
+\log p_1(x(1))
+= \log p_0(x(0)) - \int_0^1
+\operatorname{tr}\!\left(
+\frac{\partial f(x(t), t)}{\partial x(t)}
+\right)\, dt.
+$$
+
+## SDE Basics
+
+$$
+dx = f(x,t)\,dt + g(t)\,dw
+$$
+
+- $f(x,t) : \mathbb{R}^m \times [0,1] \to \mathbb{R}^m$ is the **drift term** (vector field).  
+- $g(t) : \mathbb{R} \to \mathbb{R}$ is the **diffusion term** (if $g(t)=0$, we recover the standard ODE).  
+- $w(t)$ is the standard **Wiener process** ($dw = \epsilon \cdot \sqrt{dt}$).
+
+### Discretizing the SDE (Euler Update Step)
+
+$$
+x(t + dt) = x(t) + f(x(t),t)\,dt + g(t)\,\epsilon\,\sqrt{dt}
+$$
+
+If $dt = 1$, then
+
+$$
+x_{t+1} = x_t + f(x_t,t) + g(t)\,\epsilon
+$$
+  
+- $p : \mathbb{R}^m \times [0,1] \to \mathbb{R}_+$ specifies a **probability path** from $p_0(x)$ to $p_1(x)$.
+
+### Theorem (Kolmogorov–Fokker–Planck)
+
+The evolution of $p_t(x)$ is governed by
+
+$$
+\frac{\partial p_t(x)}{\partial t}
+= -\operatorname{div}\!\left( f(x,t)p_t(x) \right) + \frac{1}{2} g^2(t)\, \Delta_x p_t(x)
+$$
+
+Here,
+
+- Divergence operator:
+    $$
+    \operatorname{div}(v)
+    = \sum_{i=1}^m \frac{\partial v_i(x)}{\partial x_i}
+    = \operatorname{tr}\!\left( \frac{\partial v(x)}{\partial x} \right)
+    $$
+
+- Laplas operator:
+    $$
+    \Delta_x p_t(x)
+    = \sum_{i=1}^m \frac{\partial^2 p_t(x)}{\partial x_i^2}
+    = \operatorname{tr}\!\left( \frac{\partial^2 p_t(x)}{\partial x^2} \right)
+    $$
+
+Thus,
+
+$$
+\frac{\partial p_t(x)}{\partial t}
+= \operatorname{tr}\!\left( - \frac{\partial}{\partial x}\big[f(x,t)p_t(x)\big] + \frac{1}{2} g^2(t) \frac{\partial^2 p_t(x)}{\partial x^2}
+\right)
+$$
+
+## DDIM & Probability Flow ODE
+
+### 1. ODE and Continuity Equation (reduced KFP)
+
+$$
+dx = f(x,t)\,dt
+$$
+
+$$
+\frac{d \log p_t(x(t))}{dt}
+= -\operatorname{tr}\!\left( \frac{\partial f_\theta(x,t)}{\partial x} \right)
+\;\;\Longleftrightarrow\;\;
+\frac{\partial p_t(x)}{\partial t}
+= -\operatorname{div}\!\left(f(x,t)p_t(x)\right)
+$$
+
+Source of randomness: $p_0(x)$.
+
+### 2. SDE and KFP Equation
+
+$$
+dx = f(x,t)\,dt + g(t)\,dw
+$$
+
+$$
+\frac{\partial p_t(x)}{\partial t}
+= -\operatorname{div}\!\left(f(x,t)p_t(x)\right) + \frac{1}{2} g^2(t)\,\Delta_x p_t(x)
+$$
+
+Sources of randomness: $p_0(x)$ & $w(t)$.
+
+### Theorem  
+Suppose the SDE
+
+$$ dx = f(x,t)\,dt + g(t)\,dw $$
+
+induces $p_t(x)$ $\to \exist$ ODE (**Probability Flow ODE**) with the **same** probability path $p_t(x)$, given by
+
+$$
+dx = \left(
+f(x,t) - \frac{1}{2} g^2(t)\, \frac{\partial}{\partial x} \log p_t(x)
+\right) dt
+$$
+
+- **score function** in continuous time:
+  $$
+  s(x,t) = \frac{\partial}{\partial x}\log p_t(x)
+  $$
+
+![alt text](notes_images/probability_flow_ode.png)
+
+> $\to$ DDPM is _equivalent_ to **DDIM**, because DDPM's SDE produces the same $p_t(x)$ as DDIM's Probability path ODE, but DDIM makes inference more stable & faster.
