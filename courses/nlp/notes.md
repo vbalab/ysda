@@ -669,23 +669,120 @@ $$
 
 ![alt text](notes_images/luong.png)
 
-## 4. Transformer Attention (Vaswani et al., 2017)
+## 4. Transformer Attention ([Attention Is All You Need [2017]](https://arxiv.org/abs/1706.03762))
 
 **Architecture:** Encoder–decoder model without any RNN / LSTM / CNN / ..., do only attention.
 
 So 2. and 3. did attention only _between_ encoder & decoder (that were RNN / ...), now encoder & decoder are attention themselves (and we also keep doing attention between).
 
-> Check out notes from ml02.
+### Step 1: Input Representations
 
-## KV-Caching
+$$
+X \in \mathbb{R}^{n_{sequence} \times d_{\text{embedding}}}
+$$
+where row $X_i$ is the embedding of token $i$.  
 
-![alt text](notes_images/kv_caching.png)
+### Step 2: Q, K, V
 
-Transformer complexity:
+The Transformer learns **three linear projection matrices per head**:
 
-- without caching: $O(\text{input len}^2 \cdot \text{embed size} + \text{output len}^3 \cdot \text{embed size})$
+$$
+W^Q \in \mathbb{R}^{d_{\text{model}} \times d_k}, \quad
+W^K \in \mathbb{R}^{d_{\text{model}} \times d_k}, \quad
+W^V \in \mathbb{R}^{d_{\text{model}} \times d_v}
+$$
 
-- with caching: $O(\text{input len}^2 \cdot \text{embed size} + \text{output len}^2 \cdot \text{embed size})$
+Then:
+
+$$
+Q = X W^Q, \quad K = X W^K, \quad V = X W^V
+$$
+
+- $Q \in \mathbb{R}^{n \times d_k}$ (queries) - "What am I looking for?"
+
+- $K \in \mathbb{R}^{n \times d_k}$ (keys) - "What properties do I have?"
+
+- $V \in \mathbb{R}^{n \times d_v}$ (values) - "What information should I pass on if selected?"
+
+### Step 3: Scoring Queries Against Keys
+
+How much should token $i$ pay attention to token $j$?
+
+The raw **attention score** between query $Q_i$ and key $K_j$ is:
+
+$$
+\text{score}(i,j) = Q_i \cdot K_j^T = \sum_{m=1}^{d_k} Q_{i,m} K_{j,m}
+$$
+
+$$
+\text{Scores} = Q K^T \in \mathbb{R}^{n \times n}
+$$
+
+Row $i$ = how much token $i$ attends to all tokens.
+
+### Step 4: Scaling by $\sqrt{d_k}$
+
+#### **Assumptions**
+
+1. $$
+    \mathbb{E}[k_i] = \mathbb{E}[q_i] = 0, \quad \mathrm{Var}[k_i] = \mathrm{Var}[q_i] = 1
+    $$
+
+    - Under standard weight initialization (e.g., Xavier) that is okay
+
+2. $ k_i, q_i $ are _independent_ across dimensions
+
+Then:
+
+$$
+\mathrm{Var}[K^\top Q]
+= \sum_{i=1}^{d_k} \mathrm{Var}[k_i q_i]
+= \sum_{i=1}^{d_k} \mathrm{Var}[k_i] \mathrm{Var}[q_i]
+= d_k
+$$
+
+#### **Scaling**
+
+Because large values push softmax into saturation, leading to vanishing gradients, we scale by $\sqrt{d_k}$ (like temperature):
+
+$$
+\text{ScaledScores} = \frac{Q K^T}{\sqrt{d_k}}
+$$
+
+### Step 5: Attention
+
+**Attention weights (scores)**:
+
+$$
+A = \text{softmax}\!\left(\frac{Q K^T}{\sqrt{d_k}}\right) \in \mathbb{R}^{n \times n}
+$$
+
+- Row $i$: distribution over which tokens $i$ attends to.  
+- Each row sums to 1.  
+
+**Attention output (pattern)**:
+
+$$
+\text{Attention}(Q, K, V) = AV
+$$
+
+### Step 6: Multi-Head Attention
+
+> _multi_-head attention instead of a _single_ head to focus on different representation subspaces: Syntactic structure, Positional patterns, Semantic roles, ...
+
+For $h$ heads, we repeat the above with different projection matrices:
+
+$$
+\text{head}_i = \text{Attention}(X W_i^Q, \, X W_i^K, \, X W_i^V)
+$$
+
+Then concatenate:
+
+$$
+\text{MHA}(X) = \text{Concat}(\text{head}_1, \dots, \text{head}_h) W^O
+$$
+
+with $W^O \in \mathbb{R}^{hd_v \times d_{\text{model}}}$.
 
 # **Seminar 3**
 
@@ -1306,12 +1403,20 @@ Collect several incoming requests & merge them into one bigger batch for GPU eff
     - $O(\text{input\_len}^2 \cdot \text{embed\_size})$ for the prompt,
     - $O(\text{output\_len}^3 \cdot \text{embed\_size})$ for generation (since each step recomputes all previous states).
 
+    $$
+    O(\text{input len}^2 \cdot \text{embed size} + \text{output len}^3 \cdot \text{embed size})
+    $$
+
 - With **KV-caching**:
   - for each layer/head we store K/V activations for **past tokens**, for a new token we only:
     - compute its Q/K/V for current step,
     - attend to the cached K/V.
 
-  - Complexity becomes: $O(\text{input len}^2 \cdot \text{embed size} + \text{output len}^2 \cdot \text{embed size})$
+  - Complexity becomes:
+
+    $$
+    O(\text{input len}^2 \cdot \text{embed size} + \text{output len}^2 \cdot \text{embed size})
+    $$
 
 > KV-cache can dominate **memory**, since it scales as $O(\text{layers} \cdot \text{heads} \cdot \text{seq\_len} \cdot d_{\text{head}})$ $\to$ for many concurrent users this becomes a major bottleneck.
 
@@ -1727,7 +1832,7 @@ $$
 h_t = (o_0, a_0, o_1, ..., o_t)
 $$
 
-This is **not Markovian**; it is a *history-conditioned stochastic policy*.
+This is **not Markovian**; it is a _history-conditioned stochastic policy_.
 
 > LLM policies violate the Markov assumption, the stationarity assumption, and the independence assumptions needed for classical RL and POMDP control.
 
@@ -1830,9 +1935,15 @@ if __name__ == "__main__":
 
 ## APIGen
 
+...
+
 ### **APIGen-MT**
 
+...
+
 ## ToolAce
+
+...
 
 ## [ReAct](https://arxiv.org/abs/2210.03629)
 
@@ -1846,4 +1957,107 @@ A loop where the LLM:
 
 ### CodeAct
 
+...
+
 ## Training Agents: AgentFlow & FlowGRPO
+
+...
+
+# **Lecture 11 - Interpretability**
+
+## Ablation
+
+**Ablation** - intervene on internal activations to study causal contribution of components.
+
+### Zero Abalation
+
+Set a neuron / channel / attention head to 0.
+
+Might create **OOD activations** (model never sees exact zeros).
+
+### Mean Abalation
+
+Replace activation by its dataset mean.
+
+### Naive Activation Patching
+
+1. Run **clean** input. Store activation at layer $L$, position $i$.
+
+2. Run **corrupted** input. At $L,i$, replace activation with stored _clean_ one.
+
+3. Measure performance difference.
+
+Used for **causal tracing** of where information flows.
+
+## Steering (Directional Editing)
+
+We can modify hidden states (any part of any layer) by adding/removing semantic directions:
+
+$$
+h' = h + \alpha d
+$$
+
+- $d$: direction (e.g., “sentiment+”, “politeness”, “refusal suppressor”).
+- $\alpha$: strength.
+
+- difference of means (positive vs negative examples)
+- PCA
+- linear probes (classifier weight vector)
+
+### Probing
+
+**Probe** - lightweight classifier on top of activations.
+
+Used to test whether a representation encodes:
+
+- syntactic dependency
+- sentiment
+- world knowledge
+
+## SAE (Sparsed AutoEncoder)
+
+- Each SAE neuron ideally corresponds to a monosemantic concept.
+- Enforces **sparse**, interpretable features.
+
+$$
+z = \text{ReLU}(W x), \quad x \approx W^\top z
+$$
+
+Training uses L1 penalty.
+
+![alt text](notes_images/sparsed_autoencoder.png)
+
+## Geometry of Representations
+
+### Privileged Basis
+
+![alt text](notes_images/privileged_basis.png)
+
+### Mono/Poly-semanticity
+
+- **monosemantic neuron** if its activation corresponds uniquely to a single, well-defined feature
+
+- **polysemantic neuron** if it responds to multiple unrelated features, or to an entangled mixture of features
+
+Polysemanticity emerges due to **superposition**: too many features, too few dimensions.
+
+### Sparsity
+
+![alt text](notes_images/sparsity.png)
+
+$\to$ sparsed neurons (SAE) while being good at interpretability are bad at inference.
+
+### Superposition
+
+Vectors are **almost-orthogonal** if their dot products are small, not exactly zero.
+
+The number of almost-orthogonal vectors grows exponentially with dimensionality:
+
+$$
+m < e^{f(\varepsilon)n}, \quad \text{where } f(\varepsilon) \sim \varepsilon^{2} \log \varepsilon.
+$$
+
+$\to$ sparse features + almost-orthogonality:
+
+- Sparsity $\to$ features rarely activate simultaneously
+- Almost-orthogonality $\to$ overlap causes minimal interference

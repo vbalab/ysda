@@ -6,7 +6,7 @@
 
 **Feedback loop** - user interactions with recommendations (e.g. clicks, likes) influence future recommendations.
 
-**Feedback loop problem** - model keeps reinforcing its own biases by learning only from user interactions on previous recommendations $\tp$ reduced diversity.
+**Feedback loop problem** - model keeps reinforcing its own biases by learning only from user interactions on previous recommendations $\to$ reduced diversity.
 
 ## 1. Collaboration-based Models
 

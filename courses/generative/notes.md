@@ -2191,6 +2191,50 @@ $$
 - $g(t) : \mathbb{R} \to \mathbb{R}$ is the **diffusion term** (if $g(t)=0$, we recover the standard ODE).  
 - $w(t)$ is the standard **Wiener process** ($dw = \epsilon \cdot \sqrt{dt}$).
 
+### DDPM is SDE
+
+$$x_t = \sqrt{1-\beta_t}\,x_{t-1} + \sqrt{\beta_t}\,\varepsilon_t.$$
+
+Rewrite the mean term as:
+
+$$
+\sqrt{1-\beta_t}\,x_{t-1}
+= x_{t-1} - \frac12 \beta_t x_{t-1} + o(\beta_t).
+$$
+
+In the limit where $\beta_t$ is small and time step is $dt$:
+
+$$
+\sqrt{1-\beta_t} \approx 1 - \frac12 \beta(t)\,dt.
+$$
+
+Thus:
+
+$$
+x_t - x_{t-1}
+= -\tfrac12 \beta(t) x_{t-1}\,dt + \sqrt{\beta(t)}\,dW_t.
+$$
+
+And this is an SDE:
+
+$$
+dx = -\tfrac12 \beta(t)\,x\,dt + \sqrt{\beta(t)}\,dW_t.
+$$
+
+So the forward **DDPM** has both:
+
+- **drift term**
+
+  $$
+  f(x,t) = -\tfrac12 \beta(t)x
+  $$
+
+- **diffusion term**
+
+  $$
+  g(t) = \sqrt{\beta(t)}.
+  $$
+
 ### Discretizing the SDE (Euler Update Step)
 
 $$
