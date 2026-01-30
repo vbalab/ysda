@@ -749,11 +749,14 @@ The weights are **shared** and trainable.
 
 ## Stride, Padding, Dilation
 
-- **Stride** - step between 2 convolutions.
+- **Stride**:
+    ![alt text](notes_images/stride.png)
 
-- **Padding** - to work with corners (filling zeros).
+- **Padding**:
 
-> Using padding we can keep the dimensionality when using convolution and do many iterations (with activation function).
+    ![alt text](notes_images/padding.png)
+
+    > Using padding we can keep the dimensionality when using convolution and do many iterations (with activation function).
 
 - **Dilation**:
     ![alt text](notes_images/dilation.png)

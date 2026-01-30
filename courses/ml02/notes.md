@@ -14,10 +14,6 @@
 
 [PERF](https://github.com/huggingface/peft) - HuggingFace's LoRA
 
-### Distillation
-
-### Quantizattion
-
 ### Triplet loss
 
 ## Convergence
@@ -198,10 +194,6 @@ def learning_loop(
 
 ![alt text](notes_images/seq2seq_diff.png)
 
-## Transformer
-
-[Attention Is All You Need [2017]](https://arxiv.org/abs/1706.03762)
-
 ## Attention (Idealogically)
 
 All RNN-like architectures suffer from forgetting information.
@@ -216,116 +208,9 @@ All RNN-like architectures suffer from forgetting information.
 
 ![alt text](notes_images/attention_idea.png)
 
-## Multi-Head Attention
+## Multihead Attention
 
-### Step 1: Input Representations
-
-$$
-X \in \mathbb{R}^{n_{sequence} \times d_{\text{embedding}}}
-$$
-where row $X_i$ is the embedding of token $i$.  
-
-### Step 2: Q, K, V
-
-The Transformer learns **three linear projection matrices per head**:
-
-$$
-W^Q \in \mathbb{R}^{d_{\text{model}} \times d_k}, \quad
-W^K \in \mathbb{R}^{d_{\text{model}} \times d_k}, \quad
-W^V \in \mathbb{R}^{d_{\text{model}} \times d_v}
-$$
-
-Then:
-
-$$
-Q = X W^Q, \quad K = X W^K, \quad V = X W^V
-$$
-
-- $Q \in \mathbb{R}^{n \times d_k}$ (queries) - "What am I looking for?"
-
-- $K \in \mathbb{R}^{n \times d_k}$ (keys) - "What properties do I have?"
-
-- $V \in \mathbb{R}^{n \times d_v}$ (values) - "What information should I pass on if selected?"
-
-### Step 3: Scoring Queries Against Keys
-
-How much should token $i$ pay attention to token $j$?
-
-The raw **attention score** between query $Q_i$ and key $K_j$ is:
-
-$$
-\text{score}(i,j) = Q_i \cdot K_j^T = \sum_{m=1}^{d_k} Q_{i,m} K_{j,m}
-$$
-
-$$
-\text{Scores} = Q K^T \in \mathbb{R}^{n \times n}
-$$
-
-Row $i$ = how much token $i$ attends to all tokens.
-
-### Step 4: Scaling by $\sqrt{d_k}$
-
-#### **Assumptions**
-
-1. $$
-    \mathbb{E}[k_i] = \mathbb{E}[q_i] = 0, \quad \mathrm{Var}[k_i] = \mathrm{Var}[q_i] = 1
-    $$
-
-    [Under standard weight initialization (e.g., Xavier) that is okay :)]
-
-2. $ k_i, q_i $ are _independent_ across dimensions
-
-Then:
-
-$$
-\mathrm{Var}[K^\top Q]
-= \sum_{i=1}^{d_k} \mathrm{Var}[k_i q_i]
-= \sum_{i=1}^{d_k} \mathrm{Var}[k_i] \mathrm{Var}[q_i]
-= d_k
-$$
-
-#### **Scaling**
-
-Because large values push softmax into saturation, leading to vanishing gradients, we scale by $\sqrt{d_k}$ (like temperature):
-
-$$
-\text{ScaledScores} = \frac{Q K^T}{\sqrt{d_k}}
-$$
-
-### Step 5: Attention
-
-**Attention weights**:
-
-$$
-A = \text{softmax}\!\left(\frac{Q K^T}{\sqrt{d_k}}\right) \in \mathbb{R}^{n \times n}
-$$
-
-- Row $i$: distribution over which tokens $i$ attends to.  
-- Each row sums to 1.  
-
-**Attention output**:
-
-$$
-\text{Attention}(Q, K, V) = AV
-$$
-
-### Step 6: Multi-Head Attention
-
-> _multi_-head attention instead of a _single_ head to focus on different representation subspaces: Syntactic structure, Positional patterns, Semantic roles, ...
-
-For $h$ heads, we repeat the above with different projection matrices:
-
-$$
-\text{head}_i = \text{Attention}(X W_i^Q, \, X W_i^K, \, X W_i^V)
-$$
-
-Then concatenate:
-
-$$
-\text{MHA}(X) = \text{Concat}(\text{head}_1, \dots, \text{head}_h) W^O
-$$
-
-with $W^O \in \mathbb{R}^{hd_v \times d_{\text{model}}}$.
+> relocated to NLP course
 
 ## Positional Encoding
 
