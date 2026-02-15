@@ -16,9 +16,13 @@
 !*.cu
 !*.sh
 !*.py
+!*.msg
+!*.action
+!*.cfg
 !.clang-format
 !.clang-tidy
 !.clangd
+!CMakeLists.txt
 
 # Allow directories so Git can traverse into them
 !*/

@@ -17,3 +17,4 @@
 9. As a result it appears that making data stationary alone makes the task of forecasting significantly easier (and even has greater effect that conditional learning), while jump component while not only adding more interpretability to the results, makes better forecasting itself while not making model significantly heavier.
 
 10. The job is _not done_ in a full measure, since I'm planning on continuing this project as my degree work at New Economic School. I already see that model encoder part might be better with CSDI's way of doing mixed time|feature learning (which blows GPU memory by a bit, but as I see it might have better potential), while keeping DiffusionTS's decoder that does component decomposition into interpretable elements.
+

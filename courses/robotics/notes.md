@@ -59,3 +59,73 @@ kill -KILL ...
 isaacsim ... 2>&1 | tee isaacsim.log    # server
 scp shad-gpu:isaacsim.log .             # laptop
 ```
+
+---
+
+# **Lecture 1**
+
+Configuration Space:
+
+- $R^2 \times S^1$ $(x, y; \theta)$
+- $R^3 \times S^3$ $(x, y, z; \theta, \phi, \gamma)$ - SE(3) - специальная евклидова группа
+
+Possibly: configuration space may include условие связи
+
+Task Space
+
+Work Space
+
+SO(3), SE(3)
+---
+
+**Rotation Matrix**:
+
+$$
+R_\theta = \begin{bmatrix}
+\cos \theta & -\sin \theta \\
+\sin \theta & \cos \theta
+\end{bmatrix}
+$$
+
+$$det(R_\theta) = 1$$
+
+$$R_\theta R_\theta^T = I$$
+
+But it can be done for more complex case using affine transformation:
+
+$$\vec{u} = R\vec{v} + \vec{b}$$
+
+Homogeneous coordinates:
+$\vec{u} = \begin{bmatrix} x \\ y \\ 1 \end{bmatrix}$
+
+$$
+A = \begin{bmatrix}
+R & T \\
+\mathbf{0}^T & 1
+\end{bmatrix} = \begin{bmatrix}
+\cos\theta & -\sin\theta & b_x \\
+\sin\theta & \cos\theta & b_y \\
+0 & 0 & 1
+\end{bmatrix}
+$$
+
+$$R_{\theta \phi \gamma} = R_\theta R_\phi R_\gamma$$
+
+**Gimbal**
+**Gimbal Lock**
+
+Кватернионы (единичной длины)
+
+---
+
+Прямая кинематика
+
+Revolutionary Joint
+
+произведение A дает end effector position M
+
+Inverse Kinematics
+
+Численные методы
+
+$$||\hat{M} - M||^2_F$$

@@ -1,0 +1,15 @@
+# Goal
+turtlesim_contest_interface/Rect search_area
+
+---
+
+# Result
+bool gift_found
+turtlesim_contest_interface/Point2D gift_coordinates
+
+---
+
+# Feedback
+bool gift_ever_detected
+float32 traveled_distance
+

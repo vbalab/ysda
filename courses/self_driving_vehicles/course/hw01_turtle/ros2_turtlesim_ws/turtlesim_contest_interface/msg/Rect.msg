@@ -1,0 +1,2 @@
+turtlesim_contest_interface/Point2D bottom_left
+turtlesim_contest_interface/Point2D top_right
