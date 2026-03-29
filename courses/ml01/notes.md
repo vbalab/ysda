@@ -749,10 +749,10 @@ The weights are **shared** and trainable.
 
 ## Stride, Padding, Dilation
 
-- **Stride**:
+- **Padding**:
     ![alt text](notes_images/stride.png)
 
-- **Padding**:
+- **Stride**:
 
     ![alt text](notes_images/padding.png)
 

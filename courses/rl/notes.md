@@ -125,7 +125,7 @@ $$
 ### Recurrent Relations
 
 $$
-Q^\pi(s_t, a_t) = \mathbb{E}_{s_{t+1}} \left[ r_t + \gamma V^\pi(s_{t+1}) \right]
+Q^\pi(s_t, a_t) = \mathbb{E}_{s_{t+1} \sim \pi} \left[ r_t + \gamma V^\pi(s_{t+1}) \right]
 $$
 
 $$
@@ -148,23 +148,35 @@ $$
 Q^*(s_t, a) = \mathbb{E}_{s_{t+1}} \left[ r_t + \gamma \max_{a'} Q^*(s_{t+1}, a') \right]
 $$
 
-## Policy Iteration
+## Value/Policy Iteration
 
-**Policy Iteration** = **Policy Evaluation** & **Policy Improvement**
+> Policy/Value Iteration strictly require process to be MDP (while others like _Monte Carlo / TD / Q-learning / SARSA_, not)
+
+### Policy Iteration
 
 Policy Iteration is strictly a _value-based_ RL.
 
-But the **idea** of alternating between evaluation and improvement shows up _indirectly in policy gradient_ methods too, though the mechanics are different.
+[But the **idea** of alternating between evaluation and improvement shows up _indirectly in policy gradient_ methods too, though the mechanics are different.]
 
-### Policy Evaluation
+### 1. Policy Iteration (PI)
 
-**Goal:** Given a fixed policy $ \pi $, compute $ V^\pi(s) $ (or $ Q^\pi(s, a) $).
+Idea: Alternate *full* **policy evaluation** and *full* **policy improvement**.  
 
-### Policy Improvement
+- Steps:
+    1. Start with some policy $\pi_0$.
+    2. **Policy Evaluation:** Solve for $V^{\pi_k}$ (exactly or iteratively until convergence).
 
-**Goal:** Given a value function $ V^\pi $, find better $\pi'$.
+        System of linear equations:
+        $$V^{\pi}(s) = \sum_{s'} P(s,\pi(s),s')[ R(s,\pi(s),s') + \gamma V^{\pi}(s')]$$
 
-#### Policy Improvement Theorem
+    3. **Policy Improvement:** Make policy greedy w.r.t. $V^{\pi_k}$, i.e. $$ \pi_{k+1}(s) \in \arg\max_a Q^{\pi_k}(s,a). $$
+    4. Repeat until policy stabilizes.
+
+- (+) Converges in a finite number of steps to the optimal policy $\pi^*$.  
+
+- (-) Full evaluation (step 2) is expensive if state space is large.  
+
+#### **Policy Improvement Theorem**
 
 If
 
@@ -180,23 +192,9 @@ $$
 \max_\pi \; \mathbb{E}_{s} \; \mathbb{E}_{a \sim \pi(a|s)} Q^{\hat{\pi}}(s,a)
 $$
 
-### 1. Policy Iteration (PI)
-
-- **Idea:** Alternate *full* policy evaluation and *full* policy improvement.  
-
-- **Steps:**
-    1. Start with some policy $\pi_0$.
-    2. **Policy Evaluation:** Solve for $V^{\pi_k}$ (exactly or iteratively until convergence).
-    3. **Policy Improvement:** Make policy greedy w.r.t. $V^{\pi_k}$, i.e. $$ \pi_{k+1}(s) \in \arg\max_a Q^{\pi_k}(s,a). $$
-    4. Repeat until policy stabilizes.
-
-- **Pros:** Converges in a finite number of steps to the optimal policy $\pi^*$.  
-
-- **Cons:** Full evaluation (step 2) is expensive if state space is large.  
-
 ### 2. Value Iteration (VI)
 
-- **Idea:** Merge evaluation and improvement into a single step.
+Idea: Merge evaluation and improvement into a single step.
 
 - Instead of fully evaluating a policy, perform a Bellman optimality update directly on the value function:
     $$
@@ -208,13 +206,13 @@ $$
     \pi^*(s) = \arg\max_a \sum_{s',r} P(s',r \mid s,a) [ r + \gamma V^*(s') ].
     $$
 
-- **Pros:** Usually converges faster than PI because it _avoids full evaluation_.
+- (+) Usually converges faster than PI because it _avoids full evaluation_.
 
-- **Cons:** Updates can be less stable; requires careful convergence checking.
+- (-) Updates can be less stable; requires careful convergence checking.
 
 ### 3. Modified Policy Iteration (MPI)
 
-- **Idea:** Trade-off between PI and VI.
+Idea: Trade-off between PI and VI.
 
 - Instead of full evaluation (PI) or a single backup (VI), do **partial policy evaluation** (e.g., a few sweeps of iterative evaluation), then improve the policy.
 
@@ -223,7 +221,7 @@ $$
   - Improve policy greedily w.r.t. that approximate value.
 
 - **Special cases:**  
-  - $m \to \infty$ $\to$ PI
+  - $m = \infty$ $\to$ PI
   - $m = 1$ $\to$ VI
 
 # **YSDA Lecture 3 - Tabular RL**
@@ -254,7 +252,7 @@ In loop:
 
 > No matter what _policy strategy_ and actual action is we consider only the best path $\to$ off-policy
 
-$$ \hat{Q}(s, a) = r(s, a) + \gamma \max_{a_i}{Q(s', a_i)}$$
+$$ \hat{Q}(s, a) = r(s, a) + \gamma \max_{a_i}{Q(s', a_i)} = r(s, a) + \gamma V(s')$$
 
 #### 1. Monte-Carlo
 
@@ -310,7 +308,7 @@ Example: SARSA
 
 - Updates as if it had acted _greedily_, even if it behaved differently.
 
-> Even if the agent **explores**, it assumes it will behave _greedily in the future_.
+> Even if the agent **explores**, it assumes it will behave _greedily in the future_ (good example: **Cliff World**).
 
 Example: Q-learning, Expected Value SARSSA
 
@@ -318,7 +316,7 @@ Example: Q-learning, Expected Value SARSSA
 
 They all are _on-policy_.
 
-$\uparrow N$ $\to$ more noise and variance, but faster learning $\to$ great at beginning of learning
+$\uparrow N$ $\to$ more noise and variance, but lower bias $\to$ great at beginning of learning
 
 ### N-step SARSA
 
@@ -1341,7 +1339,7 @@ Online "Monte-Carlo" updates:
 
 > In deep RL, explicit eligibility traces are less common (replaced by replay buffers and bootstrapping).
 
-## TD-$\lambda$
+### TD-$\lambda$
 
 $$
 \sum_{\tau=t}^\infty (\gamma \lambda)^{\tau-t} \Psi_{(1)}(s_\tau, a_\tau)
@@ -1358,7 +1356,59 @@ $$
 | …    | …                                                                      | …                   | …                   | …                   | … | …                   |
 | N    | $\sum_{\tau=t}^\infty (\gamma\lambda)^{\tau-t} \Psi_{(1)}(s_\tau, a_\tau)$      | $1-\lambda$       | $(1-\lambda)\lambda$ | $(1-\lambda)\lambda^2$ | … | $\lambda^N$ |
 
-## GAE (Generalized Advantage Estimator)
+### Watkins($\lambda$) algorithm
+
+We have two policies:
+
+- target policy (greedy)
+- behavior policy ($\epsilon$-greedy).
+
+> Watkins' $Q(\lambda)$ algorithm addresses the challenge of using eligibility traces in off-policy learning. The key insight is that we can only reliably update state-action pairs along a trajectory up to the point where we take a non-greedy action.
+
+This approach ensures that $Q$-values are only updated based on sequences where the behavior matched the target policy, maintaining the validity of the off-policy updates while still benefiting from eligibility traces when possible.
+
+#### **Algorighm:**
+
+**Initialize** $ Q(s, a) $ arbitrarily and $ e(s, a) = 0 $, for all $ s, a $.
+
+**Repeat** (for each episode):
+
+1. Initialize $ s, a $.
+2. **Repeat** (for each step of episode):
+   - Take action $ a $, observe $ r, s' $.
+   - Choose $ a' $ from $ s' $ using policy derived from $ Q $ (e.g., $ \varepsilon $-greedy).
+   - $ a^* \leftarrow \arg\max_b Q(s', b) $ (if $ a' $ ties for the max, then $ a^* \leftarrow a' $).
+   - $ \delta \leftarrow r + \gamma Q(s', a^*) - Q(s, a) $.
+   - $ e(s, a) \leftarrow e(s, a) + 1 $.
+   - **For all** $ s, a $:
+     - $ Q(s, a) \leftarrow Q(s, a) + \alpha \delta e(s, a) $.
+     - If $ a' = a^* $, then $ e(s, a) \leftarrow \gamma \lambda e(s, a) $,  
+       else $ e(s, a) \leftarrow 0 $.
+   - $ s \leftarrow s' $; $ a \leftarrow a' $.
+
+**until** $ s $ is terminal.
+
+### Retrace($\lambda$)
+
+Key innovation in Retrace:
+
+- **Truncated Importance Sampling** - use of truncated importance sampling ratios ($\min(1, \frac{\pi(a|s)}{\mu(a|s)})$), which ensures the product of these ratios doesn't grow too large and cause variance issues.
+
+Retrace maintains a running return estimate $Q^{ret}$ defined recursively:
+
+$$Q^{ret}(s_t, a_t) = r_t + \gamma[(1-\alpha)Q(s_{t+1}, a_{t+1}) + \alpha(Q(s_{t+1}, a_{t+1}) + c_{t+1}\lambda\delta_{t+1})]$$
+
+- $c_{t+1} = \min(1, \frac{\pi(a_{t+1}|s_{t+1})}{\mu(a_{t+1}|s_{t+1})})$ is the truncated importance sampling ratio
+- $\delta_{t+1} = Q^{ret}(s_{t+1}, a_{t+1}) - Q(s_{t+1}, a_{t+1})$ is the TD error for the next state-action pair
+- $\lambda$ is the trace decay parameter
+
+This update effectively combines:
+
+- Q-learning's off-policy capability
+- SARSA's ability to use eligibility traces
+- Stability through truncated importance sampling
+
+### GAE (Generalized Advantage Estimator)
 
 ![alt text](notes_images/gae.png)
 

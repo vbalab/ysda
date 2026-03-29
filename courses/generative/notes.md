@@ -926,7 +926,7 @@ $$
 - Leads to **Wasserstein GAN (WGAN)** with stable training and meaningful gradients.
 
 | Metric | Symmetric | Finite if supports disjoint? | Smooth Gradients? | Common use |
-|--|--||--||
+|--|--|--|--|--|
 | TVD    | ✅        | ❌                           | ❌                 | Theory     |
 | KL     | ❌        | ❌                           | 🚫 (p,q unstable) | MLE, VAEs  |
 | JS     | ✅        | ✅                           | 🚫 (vanishes)      | Vanilla GAN |
