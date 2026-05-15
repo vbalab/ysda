@@ -1,0 +1,1737 @@
+\chapter{Code}
+
+Full Framework Codebase can be found here: https://github.com/vbalab/FITS
+
+% \begin{lstlisting}[language=Python, caption={Real-time AO region detection code functionality}]
+% ================================================
+% FILE: src/fits/modelling/framework.py
+% ================================================
+% import pickle
+% from typing import Optional
+% from datetime import datetime
+% from dataclasses import dataclass
+% from abc import ABC, abstractmethod
+
+% import torch
+% import numpy as np
+% import matplotlib.pyplot as plt
+% from torch import nn
+% from tqdm import tqdm
+% from torch.utils.data import DataLoader
+% from IPython.display import clear_output
+
+% from fits.config import TRAINING_PATH, EVALUATION_PATH
+% from fits.dataframes.dataset import ForecastingData, NormalizationStats
+
+
+% @dataclass
+% class ForecastedData:
+%     # `nsample` - number of Monte-Carlo forecast samples
+%     forecasted_data: torch.Tensor  # [B, nsample, L, K] float
+%     forecast_mask: torch.Tensor  # [B, L, K] int
+%     # 0 - context (history)
+%     # 1 - horizon to forecast (to be generated)
+%     observed_data: torch.Tensor  # [B, L, K] float
+%     observed_mask: torch.Tensor  # [B, L, K] int
+%     # 0 - not observed
+%     # 1 - observed (ground truth)
+%     time_points: torch.Tensor  # [B, L] float
+
+
+% @dataclass
+% class ModelConfig:
+%     """Base model configuration used by :class:`ForecastingModel`.
+
+%     The configuration is intentionally typed to avoid passing around loose
+%     dictionaries.
+%     """
+
+%     name: Optional[str] = None
+
+
+% class ForecastingModel(nn.Module, ABC):
+%     """Base class for all forecasting models in the project."""
+
+%     def __init__(self, config: ModelConfig):
+%         super().__init__()
+%         self.config = config
+
+%         if not torch.cuda.is_available():
+%             raise ValueError("CUDA is not available")
+
+%         self.device = torch.device("cuda")
+
+%     @property
+%     def model_name(self) -> str:
+%         return self.config.name or self.__class__.__name__
+
+%     @abstractmethod
+%     def forward(self, batch: ForecastingData):
+%         """Compute the training loss for a batch."""
+
+%     @abstractmethod
+%     def evaluate(self, batch: ForecastingData, n_samples: int) -> ForecastedData:
+%         """Run model-specific evaluation and return generated samples."""
+
+
+% @dataclass
+% class EMA:
+%     """Exponential Moving Average of model parameters."""
+
+%     decay: float = 0.999
+%     device: Optional[torch.device] = (
+%         None  # e.g. torch.device("cpu") to store EMA on CPU
+%     )
+
+%     def __post_init__(self):
+%         self.shadow = {}
+%         self._backup = {}
+
+%     @torch.no_grad()
+%     def register(self, model: torch.nn.Module) -> None:
+%         self.shadow = {}
+%         for name, p in model.named_parameters():
+%             if p.requires_grad:
+%                 self.shadow[name] = (
+%                     p.detach().clone().to(self.device)
+%                     if self.device
+%                     else p.detach().clone()
+%                 )
+
+%     @torch.no_grad()
+%     def update(self, model: torch.nn.Module) -> None:
+%         d = self.decay
+%         for name, p in model.named_parameters():
+%             if not p.requires_grad:
+%                 continue
+%             assert (
+%                 name in self.shadow
+%             ), "EMA.register(model) must be called before EMA.update(model)."
+%             new = p.detach()
+%             if self.device:
+%                 new = new.to(self.device)
+%             self.shadow[name].mul_(d).add_(new, alpha=(1.0 - d))
+
+%     @torch.no_grad()
+%     def apply(self, model: torch.nn.Module) -> None:
+%         """Swap model params to EMA params (stores current params for later restore)."""
+%         self._backup = {}
+%         for name, p in model.named_parameters():
+%             if not p.requires_grad:
+%                 continue
+%             self._backup[name] = p.detach().clone()
+%             ema_p = self.shadow[name]
+%             if ema_p.device != p.device:
+%                 ema_p = ema_p.to(p.device)
+%             p.copy_(ema_p)
+
+%     @torch.no_grad()
+%     def restore(self, model: torch.nn.Module) -> None:
+%         """Restore params saved by apply()."""
+%         for name, p in model.named_parameters():
+%             if not p.requires_grad:
+%                 continue
+%             p.copy_(self._backup[name])
+%         self._backup = {}
+
+
+% def Train(
+%     model: ForecastingModel,
+%     train_loader: DataLoader,
+%     valid_loader: DataLoader,
+%     lr: float = 1.0e-3,
+%     epochs: int = 500,
+%     valid_epoch_interval: int = 20,
+%     verbose: bool = True,
+%     warmup_epochs: int = 10,
+%     warmup_start_factor: float = 0.1,  # initial lr = lr * warmup_start_factor
+%     grad_clip_norm: float | None = 0.3,
+%     weight_decay: float = 1e-6,
+%     use_ema: bool = False,
+%     ema_decay: float = 0.995,  # if use_ema=True
+%     ema_eval: bool = True,  # if use_ema=True
+%     ema_save: bool = True,  # if use_ema=True
+%     folder_name: str | None = None,
+% ):
+%     if not folder_name:
+%         current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+%         folder_name = f"{model.model_name}_{current_time}"
+
+%     folder_path = TRAINING_PATH / folder_name
+%     folder_path.mkdir(parents=True, exist_ok=True)
+
+%     opt = torch.optim.Adam(model.parameters(), lr=lr, weight_decay=weight_decay)
+
+%     # first 75% epoechs: 1e-3
+%     # then  15% epoechs: 1e-3 * 0.1 = 1e-4
+%     # then  10% epoechs: 1e-4 * 0.1 = 1e-5
+%     p1 = int(0.75 * epochs)
+%     p2 = int(0.9 * epochs)
+
+%     scheduler: (
+%         torch.optim.lr_scheduler.LambdaLR | torch.optim.lr_scheduler.MultiStepLR | None
+%     ) = None
+%     if warmup_epochs > 0:
+
+%         def lr_lambda(epoch: int) -> float:
+%             warm = min(1.0, (epoch + 1) / float(warmup_epochs))
+%             # approximate MultiStepLR behavior with epoch-based factor:
+%             # after passing milestones, apply gamma^k
+%             k = 0
+%             if (epoch + 1) > p1:
+%                 k += 1
+%             if (epoch + 1) > p2:
+%                 k += 1
+%             return (warmup_start_factor + (1.0 - warmup_start_factor) * warm) * (0.1**k)
+
+%         scheduler = torch.optim.lr_scheduler.LambdaLR(opt, lr_lambda=lr_lambda)
+%     else:
+%         scheduler = torch.optim.lr_scheduler.MultiStepLR(
+%             opt, milestones=[p1, p2], gamma=0.1
+%         )
+
+%     ema: EMA | None = None
+%     if use_ema:
+%         ema = EMA(decay=ema_decay)
+%         ema.register(model)
+
+%     metrics: dict[str, list[tuple[int, float]]] = {"train_loss": [], "test_loss": []}
+%     best_valid_loss = float("inf")
+
+%     for epoch_no in range(epochs):
+%         epoch_loss = 0.0
+%         model.train()
+
+%         with tqdm(train_loader) as it:
+%             for batch_no, train_batch in enumerate(it, start=1):
+%                 opt.zero_grad()
+
+%                 loss = model(train_batch)
+%                 epoch_loss += loss.item()
+
+%                 loss.backward()
+%                 if grad_clip_norm is not None:
+%                     nn.utils.clip_grad_norm_(model.parameters(), grad_clip_norm)
+%                 opt.step()
+
+%                 if ema:
+%                     ema.update(model)
+
+%                 it.set_postfix(
+%                     ordered_dict={
+%                         "avg_epoch_loss": epoch_loss / batch_no,
+%                         "epoch": epoch_no,
+%                     },
+%                     refresh=False,
+%                 )
+
+%         scheduler.step()
+%         metrics["train_loss"].append((epoch_no + 1, epoch_loss))
+
+%         if (epoch_no + 1) % valid_epoch_interval == 0:
+%             model.eval()
+
+%             if ema and ema_eval:
+%                 ema.apply(model)
+
+%             valid_loss = 0.0
+%             valid_batches = 0
+
+%             with torch.no_grad():
+%                 with tqdm(valid_loader) as it:
+%                     for batch_no, valid_batch in enumerate(it, start=1):
+%                         loss = model(valid_batch)
+%                         valid_loss += loss.item()
+%                         valid_batches = batch_no
+
+%                         it.set_postfix(
+%                             ordered_dict={
+%                                 "valid_avg_epoch_loss": valid_loss / batch_no,
+%                                 "epoch": epoch_no,
+%                             },
+%                             refresh=False,
+%                         )
+
+%             metrics["test_loss"].append((epoch_no + 1, valid_loss))
+
+%             avg_valid_loss = valid_loss / max(valid_batches, 1)
+%             if best_valid_loss > avg_valid_loss:
+%                 torch.save(model.state_dict(), folder_path / "best_model.pth")
+
+%                 best_valid_loss = avg_valid_loss
+%                 print("\n best loss is updated to ", avg_valid_loss, "at", epoch_no)
+
+%             if ema and ema_eval:
+%                 ema.restore(model)
+
+%         if verbose:
+%             clear_output(True)
+%             plt.figure(figsize=(12, 4))
+
+%             for i, (name, history) in enumerate(sorted(metrics.items())):
+%                 plt.subplot(1, len(metrics), i + 1)
+%                 plt.title(name)
+%                 plt.plot(*zip(*history))
+%                 plt.grid()
+
+%             plt.gca().text(
+%                 0.02,
+%                 0.98,
+%                 f"lr = {opt.param_groups[0]['lr']:.2e}",
+%                 transform=plt.gca().transAxes,
+%                 va="top",
+%                 ha="left",
+%             )
+
+%             plt.savefig(folder_path / "training.png")
+%             plt.show()
+
+%         if ema and ema_save:
+%             ema.apply(model)
+
+%         torch.save(model.state_dict(), folder_path / "model.pth")
+
+%         if ema and ema_save:
+%             ema.restore(model)
+
+
+% def CalcQuantileLoss(target, forecast, q: float, eval_points) -> torch.Tensor:
+%     return 2 * torch.sum(
+%         torch.abs((forecast - target) * eval_points * ((target <= forecast) * 1.0 - q))
+%     )
+
+
+% def CalcQuantileCRPS(target, forecast, eval_points, center, scale):
+%     target = target * scale + center
+%     forecast = forecast * scale + center
+
+%     quantiles = np.arange(0.05, 1.0, 0.05)
+%     denom = torch.sum(torch.abs(target * eval_points))
+%     CRPS = 0
+%     for i in range(len(quantiles)):
+%         q_pred = []
+%         for j in range(len(forecast)):
+%             q_pred.append(torch.quantile(forecast[j : j + 1], quantiles[i], dim=1))
+%         q_pred = torch.cat(q_pred, 0)
+%         q_loss = CalcQuantileLoss(target, q_pred, quantiles[i], eval_points)
+%         CRPS += q_loss / denom
+%     return CRPS.item() / len(quantiles)
+
+
+% def CalcQuantileCRPSSum(target, forecast, eval_points, center, scale):
+%     eval_points = eval_points.float().mean(-1)
+%     target = target * scale + center
+%     target = target.sum(-1)
+%     forecast = forecast * scale + center
+
+%     quantiles = np.arange(0.05, 1.0, 0.05)
+%     denom = torch.sum(torch.abs(target * eval_points))
+%     CRPS = 0
+%     for i in range(len(quantiles)):
+%         q_pred = torch.quantile(forecast.sum(-1), quantiles[i], dim=1)
+%         q_loss = CalcQuantileLoss(target, q_pred, quantiles[i], eval_points)
+%         CRPS += q_loss / denom
+%     return CRPS.item() / len(quantiles)
+
+
+% @torch.no_grad()
+% def Evaluate(
+%     model: ForecastingModel,
+%     test_loader: DataLoader,
+%     normalization: NormalizationStats,
+%     nsample: int = 5,
+%     folder_name: str | None = None,
+% ):
+%     if not folder_name:
+%         current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+%         folder_name = f"{model.model_name}_{current_time}"
+
+%     folder_path = EVALUATION_PATH / folder_name
+%     folder_path.mkdir(parents=True, exist_ok=True)
+
+%     model.eval()
+%     mse_total = 0.0
+%     mae_total = 0.0
+%     evalpoints_total = 0.0
+
+%     min_tensor = torch.as_tensor(normalization.min, device=model.device)
+%     max_tensor = torch.as_tensor(normalization.max, device=model.device)
+%     center_tensor = (max_tensor + min_tensor) / 2
+%     scale_tensor = (max_tensor - min_tensor) / 2
+%     scale_tensor = torch.where(
+%         scale_tensor == 0, torch.ones_like(scale_tensor), scale_tensor
+%     )
+
+%     all_forecasted_data: list[torch.Tensor] = []
+%     all_forecast_mask: list[torch.Tensor] = []
+%     all_observed_data: list[torch.Tensor] = []
+%     all_observed_mask: list[torch.Tensor] = []
+%     all_time_points: list[torch.Tensor] = []
+
+%     with tqdm(test_loader, mininterval=5.0, maxinterval=50.0) as it:
+%         for batch_no, test_batch in enumerate(it, start=1):
+%             f: ForecastedData = model.evaluate(test_batch, nsample)
+
+%             all_forecasted_data.append(f.forecasted_data)
+%             all_forecast_mask.append(f.forecast_mask)
+%             all_observed_data.append(f.observed_data)
+%             all_observed_mask.append(f.observed_mask)
+%             all_time_points.append(f.time_points)
+
+%             forecasted_data_median = f.forecasted_data.median(dim=1).values
+
+%             mse_current = (
+%                 ((forecasted_data_median - f.observed_data) * f.forecast_mask) ** 2
+%             ) * (scale_tensor**2)
+%             mae_current = (
+%                 torch.abs((forecasted_data_median - f.observed_data) * f.forecast_mask)
+%             ) * scale_tensor
+
+%             mse_total += mse_current.sum().item()
+%             mae_total += mae_current.sum().item()
+%             evalpoints_total += f.forecast_mask.sum().item()
+
+%             it.set_postfix(
+%                 ordered_dict={
+%                     "rmse_total": np.sqrt(mse_total / evalpoints_total),
+%                     "mae_total": mae_total / evalpoints_total,
+%                     "batch_no": batch_no,
+%                 },
+%                 refresh=True,
+%             )
+
+%     all_forecasted_data_tensor = torch.cat(all_forecasted_data, dim=0)
+%     all_forecast_mask_tensor = torch.cat(all_forecast_mask, dim=0)
+%     all_observed_data_tensor = torch.cat(all_observed_data, dim=0)
+%     all_observed_mask_tensor = torch.cat(all_observed_mask, dim=0)
+%     all_time_points_tensor = torch.cat(all_time_points, dim=0)
+
+%     with open(folder_path / f"generated_outputs_nsample{nsample}.pk", "wb") as file:
+%         pickle.dump(
+%             [
+%                 all_forecasted_data_tensor,
+%                 all_forecast_mask_tensor,
+%                 all_observed_data_tensor,
+%                 all_observed_mask_tensor,
+%                 all_time_points_tensor,
+%                 scale_tensor.cpu(),
+%                 center_tensor.cpu(),
+%             ],
+%             file,
+%         )
+
+%     crps = CalcQuantileCRPS(
+%         all_observed_data_tensor,
+%         all_forecasted_data_tensor,
+%         all_forecast_mask_tensor,
+%         center_tensor,
+%         scale_tensor,
+%     )
+%     crps_sum = CalcQuantileCRPSSum(
+%         all_observed_data_tensor,
+%         all_forecasted_data_tensor,
+%         all_forecast_mask_tensor,
+%         center_tensor,
+%         scale_tensor,
+%     )
+
+%     rmse = np.sqrt(mse_total / evalpoints_total)
+%     mae = mae_total / evalpoints_total
+
+%     metrics = [rmse, mae, crps, crps_sum]
+%     metrics = [float(metric) for metric in metrics]
+%     with open(folder_path / f"result_nsample{nsample}.pk", "wb") as file:
+%         pickle.dump(metrics, file)
+
+%     print("RMSE:", rmse)
+%     print("MAE:", mae)
+%     print("CRPS:", crps)
+%     print("CRPS_sum:", crps_sum)
+
+
+
+% ================================================
+% FILE: src/fits/modelling/FITSJ/decomposition.py
+% ================================================
+% import pickle
+% from datetime import datetime
+% from pathlib import Path
+% from typing import Sequence
+
+% import torch
+% import matplotlib.pyplot as plt
+% from torch.utils.data import DataLoader
+% from tqdm import tqdm
+
+% from fits.config import EVALUATION_PATH
+% from fits.dataframes.dataset import NormalizationStats
+% from fits.modelling.FITSJ.transformer import Decomposition
+% from fits.modelling.FITSJ.model import FITSModel
+
+
+% def _normalize_feature_indices(
+%     feature_index: int | Sequence[int] | None,
+%     n_features: int,
+% ) -> list[int]:
+%     if feature_index is None:
+%         return list(range(n_features))
+%     if isinstance(feature_index, int):
+%         feature_index = [feature_index]
+%     return [idx for idx in feature_index if 0 <= idx < n_features]
+
+
+% @torch.no_grad()
+% def EvaluateFITSJWithDecomposition(
+%     model: FITSModel,
+%     test_loader: DataLoader,
+%     normalization: NormalizationStats,
+%     nsample: int = 5,
+%     folder_name: str | None = None,
+% ):
+%     if not folder_name:
+%         current_time = datetime.now().strftime("%Y%m%d_%H%M%S")
+%         folder_name = f"{model.model_name}_{current_time}"
+
+%     folder_path = EVALUATION_PATH / folder_name
+%     folder_path.mkdir(parents=True, exist_ok=True)
+
+%     model.eval()
+
+%     min_tensor = torch.as_tensor(normalization.min, device=model.device)
+%     max_tensor = torch.as_tensor(normalization.max, device=model.device)
+%     center_tensor = (max_tensor + min_tensor) / 2
+%     scale_tensor = (max_tensor - min_tensor) / 2
+%     scale_tensor = torch.where(
+%         scale_tensor == 0, torch.ones_like(scale_tensor), scale_tensor
+%     )
+
+%     all_forecasted_data: list[torch.Tensor] = []
+%     all_forecast_mask: list[torch.Tensor] = []
+%     all_observed_data: list[torch.Tensor] = []
+%     all_observed_mask: list[torch.Tensor] = []
+%     all_time_points: list[torch.Tensor] = []
+%     all_trend: list[torch.Tensor] = []
+%     all_season: list[torch.Tensor] = []
+%     all_jump: list[torch.Tensor] = []
+%     all_error: list[torch.Tensor] = []
+
+%     with tqdm(test_loader, mininterval=5.0, maxinterval=50.0) as it:
+%         for test_batch in it:
+%             forecasted, decomposed = model.decomposition_evaluate(test_batch, nsample)
+
+%             all_forecasted_data.append(forecasted.forecasted_data)
+%             all_forecast_mask.append(forecasted.forecast_mask)
+%             all_observed_data.append(forecasted.observed_data)
+%             all_observed_mask.append(forecasted.observed_mask)
+%             all_time_points.append(forecasted.time_points)
+
+%             all_trend.append(decomposed.trend)
+%             all_season.append(decomposed.season)
+%             all_jump.append(decomposed.jump_term)
+%             all_error.append(decomposed.error)
+
+%     all_forecasted_data_tensor = torch.cat(all_forecasted_data, dim=0)
+%     all_forecast_mask_tensor = torch.cat(all_forecast_mask, dim=0)
+%     all_observed_data_tensor = torch.cat(all_observed_data, dim=0)
+%     all_observed_mask_tensor = torch.cat(all_observed_mask, dim=0)
+%     all_time_points_tensor = torch.cat(all_time_points, dim=0)
+
+%     with open(folder_path / f"generated_outputs_nsample{nsample}.pk", "wb") as file:
+%         pickle.dump(
+%             [
+%                 all_forecasted_data_tensor,
+%                 all_forecast_mask_tensor,
+%                 all_observed_data_tensor,
+%                 all_observed_mask_tensor,
+%                 all_time_points_tensor,
+%                 scale_tensor.cpu(),
+%                 center_tensor.cpu(),
+%             ],
+%             file,
+%         )
+
+%     decomposed = Decomposition(
+%         trend=torch.cat(all_trend, dim=0),
+%         season=torch.cat(all_season, dim=0),
+%         jump_term=torch.cat(all_jump, dim=0),
+%         error=torch.cat(all_error, dim=0),
+%     )
+%     with open(folder_path / f"decomposition_outputs_nsample{nsample}.pk", "wb") as file:
+%         pickle.dump(decomposed, file)
+
+
+% def PlotFITSJDecomposition(
+%     eval_foldername: str | Path,
+%     nsample: int = 5,
+%     sample_index: int = 0,
+%     feature_index: int | Sequence[int] | None = None,
+%     figsize: tuple[int, int] = (12, 10),
+% ) -> None:
+%     evaluation_dir = Path(f"../data/models/evaluation/{eval_foldername}")
+%     generated_path = evaluation_dir / f"generated_outputs_nsample{nsample}.pk"
+%     decomposition_path = evaluation_dir / f"decomposition_outputs_nsample{nsample}.pk"
+
+%     with open(generated_path, "rb") as f:
+%         (
+%             forecasted_data,
+%             forecast_mask,
+%             observed_data,
+%             observed_mask,
+%             time_points,
+%             scale_tensor,
+%             center_tensor,
+%         ) = pickle.load(f)
+
+%     with open(decomposition_path, "rb") as f:
+%         decomposed: Decomposition = pickle.load(f)
+
+%     forecasted_data = forecasted_data.cpu()
+%     forecast_mask = forecast_mask.cpu()
+%     observed_data = observed_data.cpu()
+%     observed_mask = observed_mask.cpu()
+%     time_points = time_points.cpu()
+%     scale_tensor = scale_tensor.cpu()
+%     center_tensor = center_tensor.cpu()
+
+%     n_features = observed_data.shape[-1]
+%     selected_features = _normalize_feature_indices(feature_index, n_features)
+%     if not selected_features:
+%         raise ValueError("No valid feature indices provided.")
+
+%     ncols = len(selected_features)
+%     nrows = 5
+%     fig, axes = plt.subplots(nrows=nrows, ncols=ncols, figsize=figsize, sharex=True)
+%     if ncols == 1:
+%         axes = axes.reshape(nrows, 1)
+
+%     time_axis = time_points[sample_index].numpy()
+
+%     forecast_samples = forecasted_data[sample_index]
+%     forecast_median = forecast_samples.median(dim=0).values
+%     forecast_lower, forecast_upper = torch.quantile(
+%         forecast_samples, torch.tensor([0.1, 0.9]), dim=0
+%     )
+
+%     trend_samples = decomposed.trend[sample_index].cpu()
+%     season_samples = decomposed.season[sample_index].cpu()
+%     jump_samples = decomposed.jump_term[sample_index].cpu()
+%     error_samples = decomposed.error[sample_index].cpu()
+
+%     trend_median = trend_samples.median(dim=0).values
+%     season_median = season_samples.median(dim=0).values
+%     jump_median = jump_samples.median(dim=0).values
+%     error_median = error_samples.median(dim=0).values
+
+%     trend_lower, trend_upper = torch.quantile(
+%         trend_samples, torch.tensor([0.1, 0.9]), dim=0
+%     )
+%     season_lower, season_upper = torch.quantile(
+%         season_samples, torch.tensor([0.1, 0.9]), dim=0
+%     )
+%     jump_lower, jump_upper = torch.quantile(
+%         jump_samples, torch.tensor([0.1, 0.9]), dim=0
+%     )
+%     error_lower, error_upper = torch.quantile(
+%         error_samples, torch.tensor([0.1, 0.9]), dim=0
+%     )
+
+%     for col_idx, feat in enumerate(selected_features):
+%         horizon_mask = forecast_mask[sample_index, :, feat].bool()
+%         observed_series = observed_data[sample_index, :, feat]
+%         observed_series_mask = observed_mask[sample_index, :, feat].bool()
+%         observed_horizon_mask = horizon_mask & observed_series_mask
+
+%         scale = scale_tensor[feat]
+%         center = center_tensor[feat]
+
+%         observed_denorm = observed_series * scale + center
+%         forecast_denorm = forecast_median[:, feat] * scale + center
+%         forecast_lower_denorm = forecast_lower[:, feat] * scale + center
+%         forecast_upper_denorm = forecast_upper[:, feat] * scale + center
+
+%         trend_denorm = trend_median[:, feat] * scale + center
+%         trend_lower_denorm = trend_lower[:, feat] * scale + center
+%         trend_upper_denorm = trend_upper[:, feat] * scale + center
+
+%         season_denorm = season_median[:, feat] * scale
+%         season_lower_denorm = season_lower[:, feat] * scale
+%         season_upper_denorm = season_upper[:, feat] * scale
+
+%         jump_denorm = jump_median[:, feat] * scale
+%         jump_lower_denorm = jump_lower[:, feat] * scale
+%         jump_upper_denorm = jump_upper[:, feat] * scale
+
+%         error_denorm = error_median[:, feat] * scale
+%         error_lower_denorm = error_lower[:, feat] * scale
+%         error_upper_denorm = error_upper[:, feat] * scale
+
+%         axes[0, col_idx].plot(
+%             time_axis[observed_horizon_mask.numpy()],
+%             observed_denorm[observed_horizon_mask].numpy(),
+%             color="black",
+%             label="Observed",
+%         )
+%         axes[0, col_idx].plot(
+%             time_axis[horizon_mask.numpy()],
+%             forecast_denorm[horizon_mask].numpy(),
+%             color="tab:green",
+%             label="Forecast (median)",
+%         )
+%         axes[0, col_idx].fill_between(
+%             time_axis,
+%             forecast_lower_denorm.numpy(),
+%             forecast_upper_denorm.numpy(),
+%             where=horizon_mask.numpy(),
+%             alpha=0.3,
+%             color="tab:green",
+%         )
+%         axes[0, col_idx].set_title(f"Feature {feat} | Observed vs Forecast")
+%         axes[0, col_idx].legend()
+%         axes[0, col_idx].grid(True)
+
+%         axes[1, col_idx].plot(
+%             time_axis[horizon_mask.numpy()],
+%             trend_denorm[horizon_mask].numpy(),
+%             color="tab:blue",
+%         )
+%         axes[1, col_idx].fill_between(
+%             time_axis,
+%             trend_lower_denorm.numpy(),
+%             trend_upper_denorm.numpy(),
+%             where=horizon_mask.numpy(),
+%             alpha=0.3,
+%             color="tab:blue",
+%         )
+%         axes[1, col_idx].set_title("Trend")
+%         axes[1, col_idx].grid(True)
+
+%         axes[2, col_idx].plot(
+%             time_axis[horizon_mask.numpy()],
+%             season_denorm[horizon_mask].numpy(),
+%             color="tab:orange",
+%         )
+%         axes[2, col_idx].fill_between(
+%             time_axis,
+%             season_lower_denorm.numpy(),
+%             season_upper_denorm.numpy(),
+%             where=horizon_mask.numpy(),
+%             alpha=0.3,
+%             color="tab:orange",
+%         )
+%         axes[2, col_idx].set_title("Season")
+%         axes[2, col_idx].grid(True)
+
+%         axes[3, col_idx].plot(
+%             time_axis[horizon_mask.numpy()],
+%             jump_denorm[horizon_mask].numpy(),
+%             color="tab:red",
+%         )
+%         axes[3, col_idx].fill_between(
+%             time_axis,
+%             jump_lower_denorm.numpy(),
+%             jump_upper_denorm.numpy(),
+%             where=horizon_mask.numpy(),
+%             alpha=0.3,
+%             color="tab:red",
+%         )
+%         axes[3, col_idx].set_title("Jump term")
+%         axes[3, col_idx].grid(True)
+
+%         axes[4, col_idx].plot(
+%             time_axis[horizon_mask.numpy()],
+%             error_denorm[horizon_mask].numpy(),
+%             color="tab:purple",
+%         )
+%         axes[4, col_idx].fill_between(
+%             time_axis,
+%             error_lower_denorm.numpy(),
+%             error_upper_denorm.numpy(),
+%             where=horizon_mask.numpy(),
+%             alpha=0.3,
+%             color="tab:purple",
+%         )
+%         axes[4, col_idx].set_title("Error")
+%         axes[4, col_idx].grid(True)
+
+%         for row in range(nrows):
+%             axes[row, col_idx].set_xlabel("Time step")
+%             axes[row, col_idx].set_ylabel("Value")
+
+%     plt.tight_layout()
+%     plt.show()
+
+
+
+% ================================================
+% FILE: src/fits/modelling/FITSJ/model.py
+% ================================================
+% from dataclasses import dataclass
+
+% import torch
+% import torch.nn.functional as F
+% from einops import reduce
+
+% from fits.dataframes.dataset import ForecastingData
+% from fits.modelling.FITSJ.transformer import Transformer, Decomposition
+% from fits.modelling.framework import ForecastedData, ForecastingModel, ModelConfig
+
+
+% @dataclass
+% class FITSConfig(ModelConfig):
+%     seq_len: int = 48
+%     feature_size: int = 36
+%     n_layer_enc: int = 4
+%     n_layer_dec: int = 4
+%     d_model: int = 64
+%     n_heads: int = 4
+%     mlp_hidden_times: int = 4
+%     attn_pd: float = 0.0
+%     resid_pd: float = 0.0
+%     kernel_size: int | None = None
+%     padding_size: int | None = None
+%     lognormal_hucfg_t_sampling: bool = True  # otherwise, uniform
+%     hucfg_num_steps: int = 500
+%     first_differences: bool = True
+%     conditional: bool = (
+%         True  # use observed history values for conditioning during training/sampling
+%     )
+
+%     def fits_kwargs(self) -> dict[str, int | float | None]:
+%         return {
+%             "seq_length": self.seq_len,
+%             "feature_size": self.feature_size,
+%             "n_layer_enc": self.n_layer_enc,
+%             "n_layer_dec": self.n_layer_dec,
+%             "d_model": self.d_model,
+%             "n_heads": self.n_heads,
+%             "mlp_hidden_times": self.mlp_hidden_times,
+%             "attn_pd": self.attn_pd,
+%             "resid_pd": self.resid_pd,
+%             "kernel_size": self.kernel_size,
+%             "padding_size": self.padding_size,
+%         }
+
+
+% class FITSModel(ForecastingModel):
+%     def __init__(self, config: FITSConfig = FITSConfig()):
+%         super().__init__(config)
+%         self.config: FITSConfig = config
+%         self.model = Transformer(
+%             n_feat=config.feature_size,
+%             n_channel=config.seq_len,
+%             n_layer_enc=config.n_layer_enc,
+%             n_layer_dec=config.n_layer_dec,
+%             n_heads=config.n_heads,
+%             attn_pdrop=config.attn_pd,
+%             resid_pdrop=config.resid_pd,
+%             mlp_hidden_times=config.mlp_hidden_times,
+%             max_len=config.seq_len,
+%             n_embd=config.d_model,
+%             conv_params=[config.kernel_size, config.padding_size],
+%         ).to(self.device)
+
+%         self.time_scalar = 1000  ## scale 0-1 to 0-1000 for time embedding
+
+%     def forward(self, batch: ForecastingData):
+%         diffusion_batch, partial_mask, _, forecast_mask = self._adapt_batch(batch)
+%         return self._train_loss(diffusion_batch, forecast_mask, partial_mask)
+
+%     @torch.no_grad()
+%     def evaluate(self, batch: ForecastingData, n_samples: int) -> ForecastedData:
+%         self.eval()
+
+%         diffusion_batch, partial_mask, base_levels, _ = self._adapt_batch(batch)
+%         batch_size = diffusion_batch.size(0)
+
+%         samples = []
+%         for _ in range(n_samples):
+%             generated = self.fast_sample_infill(
+%                 shape=(batch_size, self.config.seq_len, self.config.feature_size),
+%                 target=diffusion_batch,
+%                 partial_mask=partial_mask,
+%             )
+%             generated = generated.to(
+%                 diffusion_batch.device,
+%                 dtype=diffusion_batch.dtype,
+%             )
+%             samples.append(generated)
+
+%         stacked = torch.stack(samples, dim=1)
+%         if self.config.first_differences:
+%             stacked = self._restore_levels(stacked, base_levels)
+
+%         return ForecastedData(
+%             forecasted_data=stacked,
+%             forecast_mask=batch.forecast_mask.to(self.device, dtype=torch.float32),
+%             observed_data=batch.observed_data.to(self.device, dtype=torch.float32),
+%             observed_mask=batch.observed_mask.to(self.device, dtype=torch.float32),
+%             time_points=batch.time_points[..., 0].to(self.device, dtype=torch.float32),
+%         )
+
+%     @torch.no_grad()
+%     def decomposition_evaluate(
+%         self, batch: ForecastingData, n_samples: int
+%     ) -> tuple[ForecastedData, Decomposition]:
+%         self.eval()
+
+%         diffusion_batch, partial_mask, base_levels, _ = self._adapt_batch(batch)
+%         batch_size = diffusion_batch.size(0)
+
+%         samples = []
+%         trend_samples = []
+%         season_samples = []
+%         jump_samples = []
+%         error_samples = []
+
+%         t_input = torch.ones(
+%             batch_size, device=diffusion_batch.device, dtype=diffusion_batch.dtype
+%         )
+%         t_input = t_input * self.time_scalar
+
+%         for _ in range(n_samples):
+%             generated = self.fast_sample_infill(
+%                 shape=(batch_size, self.config.seq_len, self.config.feature_size),
+%                 target=diffusion_batch,
+%                 partial_mask=partial_mask,
+%             )
+%             generated = generated.to(
+%                 diffusion_batch.device,
+%                 dtype=diffusion_batch.dtype,
+%             )
+%             samples.append(generated)
+
+%             _, decomposed = self._output(generated, t_input)
+%             trend_samples.append(decomposed.trend)
+%             season_samples.append(decomposed.season)
+%             jump_samples.append(decomposed.jump_term)
+%             error_samples.append(decomposed.error)
+
+%         stacked = torch.stack(samples, dim=1)
+%         trend = torch.stack(trend_samples, dim=1)
+%         season = torch.stack(season_samples, dim=1)
+%         jump_term = torch.stack(jump_samples, dim=1)
+%         error = torch.stack(error_samples, dim=1)
+
+%         if self.config.first_differences:
+%             stacked = self._restore_levels(stacked, base_levels)
+%             trend = self._restore_levels(trend, base_levels)
+
+%             zero_levels = torch.zeros_like(base_levels)
+%             season = self._restore_levels(season, zero_levels)
+%             jump_term = self._restore_levels(jump_term, zero_levels)
+%             error = self._restore_levels(error, zero_levels)
+
+%         return (
+%             ForecastedData(
+%                 forecasted_data=stacked,
+%                 forecast_mask=batch.forecast_mask.to(self.device, dtype=torch.float32),
+%                 observed_data=batch.observed_data.to(self.device, dtype=torch.float32),
+%                 observed_mask=batch.observed_mask.to(self.device, dtype=torch.float32),
+%                 time_points=batch.time_points[..., 0].to(
+%                     self.device, dtype=torch.float32
+%                 ),
+%             ),
+%             Decomposition(trend=trend, season=season, jump_term=jump_term, error=error),
+%         )
+
+%     def _output(self, x: torch.Tensor, t: torch.Tensor):
+%         return self.model(x, t, padding_masks=None)
+
+%     def _train_loss(
+%         self,
+%         x_start: torch.Tensor,
+%         loss_mask: torch.Tensor,
+%         partial_mask: torch.Tensor | None = None,
+%     ) -> torch.Tensor:
+%         z0 = torch.randn_like(x_start)
+%         if self.config.conditional and partial_mask is not None:
+%             z0 = z0.clone()
+%             z0[partial_mask] = x_start[partial_mask]
+%         z1 = x_start
+
+%         t = torch.rand(z0.shape[0], 1, 1, device=z0.device)
+%         if self.config.lognormal_hucfg_t_sampling:
+%             t = torch.sigmoid(torch.randn(z0.shape[0], 1, 1, device=z0.device))
+
+%         z_t = t * z1 + (1.0 - t) * z0
+%         target = z1 - z0
+
+%         model_out, _ = self._output(z_t, t.squeeze() * self.time_scalar)
+%         train_loss = F.mse_loss(model_out, target, reduction="none")
+
+%         loss_mask = loss_mask.to(device=train_loss.device, dtype=train_loss.dtype)
+%         train_loss = train_loss * loss_mask
+
+%         loss_sum = reduce(train_loss, "b ... -> b", "sum")
+%         mask_sum = reduce(loss_mask, "b ... -> b", "sum").clamp_min(1.0)
+%         return (loss_sum / mask_sum).mean()
+
+%     def fast_sample_infill(
+%         self,
+%         shape: tuple[int, int, int],
+%         target: torch.Tensor,
+%         partial_mask: torch.Tensor | None = None,
+%         hucfg_Kscale: float = 0.03,
+%     ) -> torch.Tensor:
+%         z0 = torch.randn(shape, device=self.device)
+%         if self.config.conditional and partial_mask is not None:
+%             z0 = z0.clone()
+%             z0[partial_mask] = target[partial_mask]
+%         z1 = zt = z0
+
+%         for step in range(self.config.hucfg_num_steps):
+%             t = step / self.config.hucfg_num_steps
+%             t = t**hucfg_Kscale
+
+%             z0 = torch.randn(shape, device=self.device)
+%             if self.config.conditional and partial_mask is not None:
+%                 z0 = z0.clone()
+%                 z0[partial_mask] = target[partial_mask]
+
+%             target_t = target * t + z0 * (1 - t)
+%             zt = z1 * t + z0 * (1 - t)
+%             if partial_mask is not None:
+%                 zt = zt.clone()
+%                 zt[partial_mask] = target_t[partial_mask]
+
+%             v, _ = self._output(
+%                 zt, torch.tensor([t * self.time_scalar], device=self.device)
+%             )
+
+%             z1 = zt.clone() + (1 - t) * v
+
+%             if self.config.first_differences:
+%                 z1 = torch.clamp(z1, min=-2, max=2)
+%                 # in first differences [-1, 1] -> [-2, 2]=[(-1) - (1), 1 - (-1)]
+%             else:
+%                 z1 = torch.clamp(z1, min=-1, max=1)
+
+%         return z1
+
+%     def _adapt_batch(
+%         self, batch: ForecastingData
+%     ) -> tuple[torch.Tensor, torch.Tensor, torch.Tensor, torch.Tensor]:
+%         observed_data = batch.observed_data.to(dtype=torch.float32, device=self.device)
+%         context_mask = (batch.observed_mask * (1 - batch.forecast_mask)).to(self.device)
+%         partial_mask = context_mask.bool()
+%         # 0 - to be generated
+%         # 1 - known at generation
+%         forecast_mask = batch.forecast_mask.to(device=self.device, dtype=torch.float32)
+%         base_levels = observed_data[:, :1]
+
+%         if not self.config.first_differences:
+%             return observed_data, partial_mask, base_levels, forecast_mask
+
+%         diff_data = self._first_differences(observed_data)
+%         diff_partial_mask = self._first_difference_mask(partial_mask)
+
+%         return diff_data, diff_partial_mask, base_levels, forecast_mask
+
+%     @staticmethod
+%     def _first_differences(data: torch.Tensor) -> torch.Tensor:
+%         diffs = torch.zeros_like(data)
+%         diffs[:, 1:] = data[:, 1:] - data[:, :-1]
+%         return diffs
+
+%     @staticmethod
+%     def _first_difference_mask(context_mask: torch.Tensor) -> torch.Tensor:
+%         diff_mask = torch.zeros_like(context_mask)
+%         diff_mask[:, 1:] = context_mask[:, 1:] & context_mask[:, :-1]
+%         diff_mask[:, 0] = context_mask[:, 0]
+%         return diff_mask
+
+%     @staticmethod
+%     def _restore_levels(
+%         differences: torch.Tensor, base_levels: torch.Tensor
+%     ) -> torch.Tensor:
+%         base = base_levels.unsqueeze(1)
+%         return base + differences.cumsum(dim=2)
+
+
+
+% ================================================
+% FILE: src/fits/modelling/FITSJ/transformer.py
+% ================================================
+% import os
+% import math
+% from dataclasses import dataclass
+
+% import torch
+% import numpy as np
+% import torch.nn.functional as F
+% from torch import nn
+% from einops import rearrange, reduce, repeat
+
+% from fits.modelling.FMTS.interpretable_diffusion.model_utils import (
+%     AdaLayerNorm,
+%     Conv_MLP,
+%     GELU2,
+%     RMSNorm,
+%     Transpose,
+% )
+
+
+% ## hunote: our backbone network is most same as diffusion-TS. Diffusion-TS backbone has really good potential!!
+% class TrendBlock(nn.Module):
+%     """
+%     Model trend of time series using the polynomial regressor.
+%     """
+
+%     def __init__(self, in_dim, out_dim, in_feat, out_feat, act):
+%         super(TrendBlock, self).__init__()
+%         trend_poly = 3
+%         self.trend = nn.Sequential(
+%             nn.Conv1d(
+%                 in_channels=in_dim, out_channels=trend_poly, kernel_size=3, padding=1
+%             ),
+%             act,
+%             Transpose(shape=(1, 2)),
+%             nn.Conv1d(in_feat, out_feat, 3, stride=1, padding=1),
+%         )
+
+%         lin_space = torch.arange(1, out_dim + 1, 1) / (out_dim + 1)
+%         self.poly_space = torch.stack(
+%             [lin_space ** float(p + 1) for p in range(trend_poly)], dim=0
+%         )
+
+%     def forward(self, input):
+%         b, c, h = input.shape
+%         x = self.trend(input).transpose(1, 2)
+%         trend_vals = torch.matmul(x.transpose(1, 2), self.poly_space.to(x.device))
+%         trend_vals = trend_vals.transpose(1, 2)
+%         return trend_vals
+
+
+% class FourierLayer(nn.Module):
+%     """
+%     Model seasonality of time series using the inverse DFT.
+%     """
+
+%     def __init__(self, d_model, low_freq=1, factor=1):
+%         super().__init__()
+%         self.d_model = d_model
+%         self.factor = factor
+%         self.low_freq = low_freq
+
+%     def forward(self, x):
+%         """x: (b, t, d)"""
+%         b, t, d = x.shape
+%         x_freq = torch.fft.rfft(x, dim=1)
+
+%         if t % 2 == 0:
+%             x_freq = x_freq[:, self.low_freq : -1]
+%             f = torch.fft.rfftfreq(t)[self.low_freq : -1]
+%         else:
+%             x_freq = x_freq[:, self.low_freq :]
+%             f = torch.fft.rfftfreq(t)[self.low_freq :]
+
+%         x_freq, index_tuple = self.topk_freq(x_freq)
+%         f = repeat(f, "f -> b f d", b=x_freq.size(0), d=x_freq.size(2)).to(
+%             x_freq.device
+%         )
+%         f = rearrange(f[index_tuple], "b f d -> b f () d").to(x_freq.device)
+%         return self.extrapolate(x_freq, f, t)
+
+%     def extrapolate(self, x_freq, f, t):
+%         x_freq = torch.cat([x_freq, x_freq.conj()], dim=1)
+%         f = torch.cat([f, -f], dim=1)
+%         t = rearrange(torch.arange(t, dtype=torch.float), "t -> () () t ()").to(
+%             x_freq.device
+%         )
+
+%         amp = rearrange(x_freq.abs(), "b f d -> b f () d")
+%         phase = rearrange(x_freq.angle(), "b f d -> b f () d")
+%         x_time = amp * torch.cos(2 * math.pi * f * t + phase)
+%         return reduce(x_time, "b f t d -> b t d", "sum")
+
+%     def topk_freq(self, x_freq):
+%         length = x_freq.shape[1]
+%         top_k = int(self.factor * math.log(length))
+%         values, indices = torch.topk(
+%             x_freq.abs(), top_k, dim=1, largest=True, sorted=True
+%         )
+%         mesh_a, mesh_b = torch.meshgrid(
+%             torch.arange(x_freq.size(0)), torch.arange(x_freq.size(2)), indexing="ij"
+%         )
+%         index_tuple = (mesh_a.unsqueeze(1), indices, mesh_b.unsqueeze(1))
+%         x_freq = x_freq[index_tuple]
+%         return x_freq, index_tuple
+
+
+% class SeasonBlock(nn.Module):
+%     """
+%     Model seasonality of time series using the Fourier series.
+%     """
+
+%     def __init__(self, in_dim, out_dim, factor=1):
+%         super(SeasonBlock, self).__init__()
+%         season_poly = factor * min(32, int(out_dim // 2))
+%         self.season = nn.Conv1d(
+%             in_channels=in_dim, out_channels=season_poly, kernel_size=1, padding=0
+%         )
+%         fourier_space = torch.arange(0, out_dim, 1) / out_dim
+%         p1, p2 = (
+%             (season_poly // 2, season_poly // 2)
+%             if season_poly % 2 == 0
+%             else (season_poly // 2, season_poly // 2 + 1)
+%         )
+%         s1 = torch.stack(
+%             [torch.cos(2 * np.pi * p * fourier_space) for p in range(1, p1 + 1)], dim=0
+%         )
+%         s2 = torch.stack(
+%             [torch.sin(2 * np.pi * p * fourier_space) for p in range(1, p2 + 1)], dim=0
+%         )
+%         self.poly_space = torch.cat([s1, s2])
+
+%     def forward(self, input):
+%         b, c, h = input.shape
+%         x = self.season(input)
+%         season_vals = torch.matmul(x.transpose(1, 2), self.poly_space.to(x.device))
+%         season_vals = season_vals.transpose(1, 2)
+%         return season_vals
+
+
+% ### precompute_freqs_cis/reshape_for_broadcast/apply_rotary_emb are rope code adapted from LLama code
+% def precompute_freqs_cis(dim: int, end: int, theta: float = 10000.0):
+%     freqs = 1.0 / (theta ** (torch.arange(0, dim, 2)[: (dim // 2)].float() / dim))
+%     t = torch.arange(end, device=freqs.device, dtype=torch.float32)
+%     freqs = torch.outer(t, freqs)
+%     freqs_cis = torch.polar(torch.ones_like(freqs), freqs)  # complex64
+%     return freqs_cis
+
+
+% def reshape_for_broadcast(freqs_cis: torch.Tensor, x: torch.Tensor):
+%     ndim = x.ndim
+%     assert 0 <= 1 < ndim
+%     assert freqs_cis.shape == (x.shape[1], x.shape[-1])
+%     shape = [d if i == 1 or i == ndim - 1 else 1 for i, d in enumerate(x.shape)]
+%     return freqs_cis.view(*shape)
+
+
+% def apply_rotary_emb(
+%     xq: torch.Tensor,
+%     xk: torch.Tensor,
+%     freqs_cis: torch.Tensor,
+% ):
+%     xq_ = torch.view_as_complex(xq.float().reshape(*xq.shape[:-1], -1, 2))
+%     xk_ = torch.view_as_complex(xk.float().reshape(*xk.shape[:-1], -1, 2))
+%     freqs_cis = reshape_for_broadcast(freqs_cis, xq_)
+%     xq_out = torch.view_as_real(xq_ * freqs_cis).flatten(3)
+%     xk_out = torch.view_as_real(xk_ * freqs_cis).flatten(3)
+%     return xq_out.type_as(xq), xk_out.type_as(xk)
+
+
+% class FullAttention(nn.Module):
+%     def __init__(
+%         self,
+%         n_embd,  # the embed dim
+%         n_head,  # the number of heads
+%         attn_pdrop=0.1,  # attention dropout prob
+%         resid_pdrop=0.1,  # residual attention dropout prob
+%         max_len=None,
+%     ):
+%         super().__init__()
+%         assert n_embd % n_head == 0
+
+%         self.key = nn.Linear(n_embd, n_embd)
+%         self.query = nn.Linear(n_embd, n_embd)
+%         self.value = nn.Linear(n_embd, n_embd)
+
+%         self.attn_drop = nn.Dropout(attn_pdrop)
+%         self.resid_drop = nn.Dropout(resid_pdrop)
+
+%         self.proj = nn.Linear(n_embd, n_embd)
+%         self.n_head = n_head
+
+%         self.q_norm = RMSNorm(n_embd)
+%         self.k_norm = RMSNorm(n_embd)
+
+%         self.freqs_cis = precompute_freqs_cis(
+%             n_embd // n_head,
+%             max_len * 4,  ## if we use register, the overall length can be longer.
+%             50000,  ##
+%         )
+
+%         self.regi_num = 128
+%         self.register = nn.Parameter(torch.randn([1, self.regi_num, n_embd]))
+
+%     def forward(self, x, mask=None):
+%         # x = torch.cat([self.register.repeat(x.shape[0],1,1), x], 1)
+
+%         B, T, C = x.size()
+%         k = self.key(x)
+%         q = self.query(x)
+%         v = self.value(x)
+
+%         k = self.k_norm(k) + 0.1 * k
+%         q = self.q_norm(q) + 0.1 * q
+
+%         k = k.view(B, T, self.n_head, C // self.n_head).transpose(
+%             1, 2
+%         )  # (B, nh, T, hs)
+%         q = q.view(B, T, self.n_head, C // self.n_head).transpose(
+%             1, 2
+%         )  # (B, nh, T, hs)
+%         v = v.view(B, T, self.n_head, C // self.n_head).transpose(
+%             1, 2
+%         )  # (B, nh, T, hs)
+
+%         if int(os.environ.get("hucfg_attention_rope_use", "-1")) == 1:
+%             freqs_cis = self.freqs_cis.cuda()[0:T]
+%             q, k = apply_rotary_emb(
+%                 q.permute(0, 2, 1, 3), k.permute(0, 2, 1, 3), freqs_cis=freqs_cis
+%             )
+%             q, k = q.permute(0, 2, 1, 3), k.permute(0, 2, 1, 3)
+
+%         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))  # (B, nh, T, T)
+
+%         att = F.softmax(att, dim=-1)  # (B, nh, T, T)
+%         # att = torch.sigmoid(att)
+%         att = self.attn_drop(att)
+%         y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+%         y = (
+%             y.transpose(1, 2).contiguous().view(B, T, C)
+%         )  # re-assemble all head outputs side by side, (B, T, C)
+%         att = att.mean(dim=1, keepdim=False)  # (B, T, T)
+
+%         # output projection
+%         y = self.resid_drop(self.proj(y))
+%         # y = y[:,self.regi_num:,:]
+
+%         return y, att
+
+
+% class CrossAttention(nn.Module):
+%     def __init__(
+%         self,
+%         n_embd,  # the embed dim
+%         condition_embd,  # condition dim
+%         n_head,  # the number of heads
+%         attn_pdrop=0.1,  # attention dropout prob
+%         resid_pdrop=0.1,  # residual attention dropout prob
+%         max_len=None,
+%     ):
+%         super().__init__()
+%         assert n_embd % n_head == 0
+%         # key, query, value projections for all heads
+%         self.key = nn.Linear(condition_embd, n_embd)
+%         self.query = nn.Linear(n_embd, n_embd)
+%         self.value = nn.Linear(condition_embd, n_embd)
+
+%         # regularization
+%         self.attn_drop = nn.Dropout(attn_pdrop)
+%         self.resid_drop = nn.Dropout(resid_pdrop)
+%         # output projection
+%         self.proj = nn.Linear(n_embd, n_embd)
+%         self.n_head = n_head
+
+%         self.q_norm = RMSNorm(n_embd)
+%         self.k_norm = RMSNorm(n_embd)
+
+%         self.freqs_cis = precompute_freqs_cis(
+%             n_embd // n_head,
+%             max_len * 4,
+%             50000,  ## hucfg913
+%         )
+
+%         self.regi_num = 128
+%         self.register = nn.Parameter(torch.randn([1, self.regi_num, n_embd]))
+%         self.register_2 = nn.Parameter(torch.randn([1, self.regi_num, n_embd]))
+
+%     def forward(self, x, encoder_output, mask=None):
+
+%         # x = torch.cat([self.register.repeat(x.shape[0],1,1), x], 1)
+
+%         # encoder_output = torch.cat([self.register_2.repeat(x.shape[0],1,1), encoder_output], 1)
+
+%         B, T, C = x.size()
+%         B, T_E, _ = encoder_output.size()
+%         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
+%         k = self.key(encoder_output)
+%         q = self.query(x)
+
+%         k = self.k_norm(k) + 0.1 * k  ## residual qk norm
+%         q = self.q_norm(q) + 0.1 * q
+
+%         k = k.view(B, T_E, self.n_head, C // self.n_head).transpose(1, 2)
+%         q = q.view(B, T, self.n_head, C // self.n_head).transpose(
+%             1, 2
+%         )  # (B, nh, T, hs)
+
+%         freqs_cis = self.freqs_cis.cuda()[0:T]
+%         q, k = apply_rotary_emb(
+%             q.permute(0, 2, 1, 3), k.permute(0, 2, 1, 3), freqs_cis=freqs_cis
+%         )
+%         q, k = q.permute(0, 2, 1, 3), k.permute(0, 2, 1, 3)
+
+%         v = (
+%             self.value(encoder_output)
+%             .view(B, T_E, self.n_head, C // self.n_head)
+%             .transpose(1, 2)
+%         )  # (B, nh, T, hs)
+%         att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(k.size(-1)))  # (B, nh, T, T)
+
+%         att = F.softmax(att, dim=-1)  # (B, nh, T, T)
+%         # att = torch.sigmoid(att)  ## sigmoid attention infact
+
+%         att = self.attn_drop(att)
+%         y = att @ v  # (B, nh, T, T) x (B, nh, T, hs) -> (B, nh, T, hs)
+%         y = (
+%             y.transpose(1, 2).contiguous().view(B, T, C)
+%         )  # re-assemble all head outputs side by side, (B, T, C)
+%         att = att.mean(dim=1, keepdim=False)  # (B, T, T)
+
+%         y = self.resid_drop(self.proj(y))
+%         # y = y[:,self.regi_num:,:]
+
+%         return y, att
+
+
+% class EncoderBlock(nn.Module):
+%     """an unassuming Transformer block"""
+
+%     def __init__(
+%         self,
+%         n_embd=1024,
+%         n_head=16,
+%         attn_pdrop=0.1,
+%         resid_pdrop=0.1,
+%         mlp_hidden_times=4,
+%         activate="GELU",
+%         max_len=None,
+%     ):
+%         super().__init__()
+
+%         self.ln1 = AdaLayerNorm(n_embd)
+%         self.ln2 = nn.LayerNorm(n_embd)
+%         self.attn = FullAttention(
+%             n_embd=n_embd,
+%             n_head=n_head,
+%             attn_pdrop=attn_pdrop,
+%             resid_pdrop=resid_pdrop,
+%             max_len=max_len,
+%         )
+
+%         assert activate in ["GELU", "GELU2"]
+%         act = nn.GELU() if activate == "GELU" else GELU2()
+
+%         self.mlp = nn.Sequential(
+%             nn.Linear(n_embd, mlp_hidden_times * n_embd),
+%             act,
+%             nn.Linear(mlp_hidden_times * n_embd, n_embd),
+%             nn.Dropout(resid_pdrop),
+%         )
+
+%     def forward(self, x, timestep, mask=None, label_emb=None):
+%         a, att = self.attn(self.ln1(x, timestep, label_emb), mask=mask)
+%         x = x + a
+%         x = x + self.mlp(self.ln2(x))  # only one really use encoder_output
+%         return x, att
+
+
+% class Encoder(nn.Module):
+%     def __init__(
+%         self,
+%         n_layer=14,
+%         n_embd=1024,
+%         n_head=16,
+%         attn_pdrop=0.0,
+%         resid_pdrop=0.0,
+%         mlp_hidden_times=4,
+%         block_activate="GELU",
+%         max_len=None,
+%     ):
+%         super().__init__()
+
+%         self.blocks = nn.Sequential(
+%             *[
+%                 EncoderBlock(
+%                     n_embd=n_embd,
+%                     n_head=n_head,
+%                     attn_pdrop=attn_pdrop,
+%                     resid_pdrop=resid_pdrop,
+%                     mlp_hidden_times=mlp_hidden_times,
+%                     activate=block_activate,
+%                     max_len=max_len,
+%                 )
+%                 for _ in range(n_layer)
+%             ]
+%         )
+
+%     def forward(self, input, t, padding_masks=None, label_emb=None):
+%         x = input
+
+%         for block_idx in range(len(self.blocks)):
+%             x, _ = self.blocks[block_idx](x, t, mask=padding_masks, label_emb=label_emb)
+%         return x
+
+
+% class DecoderBlock(nn.Module):
+%     """an unassuming Transformer block"""
+
+%     def __init__(
+%         self,
+%         n_channel,
+%         n_feat,
+%         n_embd=1024,
+%         n_head=16,
+%         attn_pdrop=0.1,
+%         resid_pdrop=0.1,
+%         mlp_hidden_times=4,
+%         activate="GELU",
+%         condition_dim=1024,
+%         max_len=None,
+%     ):
+%         super().__init__()
+
+%         self.ln1 = AdaLayerNorm(n_embd)
+%         self.ln2 = nn.LayerNorm(n_embd)
+%         # self.ln2 = AdaLayerNorm(n_embd)
+
+%         self.attn1 = FullAttention(
+%             n_embd=n_embd,
+%             n_head=n_head,
+%             attn_pdrop=attn_pdrop,
+%             resid_pdrop=resid_pdrop,
+%             max_len=max_len,
+%         )
+%         self.attn2 = CrossAttention(
+%             n_embd=n_embd,
+%             condition_embd=condition_dim,
+%             n_head=n_head,
+%             attn_pdrop=attn_pdrop,
+%             resid_pdrop=resid_pdrop,
+%             max_len=max_len,
+%         )
+
+%         self.ln1_1 = AdaLayerNorm(n_embd)
+%         # self.ln1_1 = nn.LayerNorm(n_embd)
+
+%         assert activate in ["GELU", "GELU2"]
+%         act = nn.GELU() if activate == "GELU" else GELU2()
+
+%         self.trend = TrendBlock(n_channel, n_channel, n_embd, n_feat, act=act)
+%         self.seasonal = FourierLayer(d_model=n_embd)
+
+%         self.mlp = nn.Sequential(
+%             nn.Linear(n_embd, mlp_hidden_times * n_embd),
+%             act,
+%             nn.Linear(mlp_hidden_times * n_embd, n_embd),
+%             nn.Dropout(resid_pdrop),
+%         )
+
+%         self.proj = nn.Conv1d(n_channel, n_channel * 2, 1)
+%         self.linear = nn.Linear(n_embd, n_feat)
+%         self.jump_head = nn.Linear(n_embd, n_feat)
+
+%     def forward(self, x, encoder_output, timestep, mask=None, label_emb=None):
+%         a, att = self.attn1(self.ln1(x, timestep, label_emb), mask=mask)
+%         x = x + a
+
+%         a, att = self.attn2(self.ln1_1(x, timestep), encoder_output, mask=mask)
+%         x = x + a
+%         x1, x2 = self.proj(x).chunk(2, dim=1)
+%         trend, season = self.trend(x1), self.seasonal(x2)
+%         x = x + self.mlp(self.ln2(x))
+
+%         m = torch.mean(x, dim=1, keepdim=True)
+%         jump_score = self.jump_head(x)
+%         return x - m, self.linear(m), trend, season, jump_score
+
+
+% class Decoder(nn.Module):
+%     def __init__(
+%         self,
+%         n_channel,
+%         n_feat,
+%         n_embd=1024,
+%         n_head=16,
+%         n_layer=10,
+%         attn_pdrop=0.1,
+%         resid_pdrop=0.1,
+%         mlp_hidden_times=4,
+%         block_activate="GELU",
+%         condition_dim=512,
+%         max_len=None,
+%     ):
+%         super().__init__()
+%         self.d_model = n_embd
+%         self.n_feat = n_feat
+%         self.blocks = nn.Sequential(
+%             *[
+%                 DecoderBlock(
+%                     n_feat=n_feat,
+%                     n_channel=n_channel,
+%                     n_embd=n_embd,
+%                     n_head=n_head,
+%                     attn_pdrop=attn_pdrop,
+%                     resid_pdrop=resid_pdrop,
+%                     mlp_hidden_times=mlp_hidden_times,
+%                     activate=block_activate,
+%                     condition_dim=condition_dim,
+%                     max_len=max_len,
+%                 )
+%                 for _ in range(n_layer)
+%             ]
+%         )
+
+%     def forward(self, x, t, enc, padding_masks=None, label_emb=None):
+%         b, c, _ = x.shape
+%         # att_weights = []
+%         mean = []
+%         season = torch.zeros((b, c, self.d_model), device=x.device)
+%         trend = torch.zeros((b, c, self.n_feat), device=x.device)
+%         jump_scores = torch.zeros((b, c, self.n_feat), device=x.device)
+%         for block_idx in range(len(self.blocks)):
+%             (
+%                 x,
+%                 residual_mean,
+%                 residual_trend,
+%                 residual_season,
+%                 residual_jump,
+%             ) = self.blocks[block_idx](
+%                 x, enc, t, mask=padding_masks, label_emb=label_emb
+%             )
+%             season += residual_season
+%             trend += residual_trend
+%             jump_scores += residual_jump
+%             mean.append(residual_mean)
+
+%         mean = torch.cat(mean, dim=1)
+%         return x, mean, trend, season, jump_scores
+
+
+% @dataclass
+% class Decomposition:
+%     trend: torch.Tensor
+%     season: torch.Tensor
+%     jump_term: torch.Tensor
+%     error: torch.Tensor
+
+
+% class Transformer(nn.Module):
+%     def __init__(
+%         self,
+%         n_feat,
+%         n_channel,
+%         n_layer_enc=5,
+%         n_layer_dec=14,
+%         n_embd=1024,
+%         n_heads=16,
+%         attn_pdrop=0.1,
+%         resid_pdrop=0.1,
+%         mlp_hidden_times=4,
+%         block_activate="GELU",
+%         max_len=2048,
+%         conv_params=None,
+%         **kwargs,
+%     ):
+%         super().__init__()
+%         self.emb = Conv_MLP(n_feat, n_embd, resid_pdrop=resid_pdrop)
+%         self.inverse = Conv_MLP(n_embd, n_feat, resid_pdrop=resid_pdrop)
+
+%         if conv_params is None or conv_params[0] is None:
+%             if n_feat < 32 and n_channel < 64:
+%                 kernel_size, padding = 1, 0
+%             else:
+%                 kernel_size, padding = 5, 2
+%         else:
+%             kernel_size, padding = conv_params
+
+%         self.combine_s = nn.Conv1d(
+%             n_embd,
+%             n_feat,
+%             kernel_size=kernel_size,
+%             stride=1,
+%             padding=padding,
+%             padding_mode="circular",
+%             bias=False,
+%         )
+%         self.combine_m = nn.Conv1d(
+%             n_layer_dec,
+%             1,
+%             kernel_size=1,
+%             stride=1,
+%             padding=0,
+%             padding_mode="circular",
+%             bias=False,
+%         )
+%         self.max_len = max_len
+%         self.encoder = Encoder(
+%             n_layer_enc,
+%             n_embd,
+%             n_heads,
+%             attn_pdrop,
+%             resid_pdrop,
+%             mlp_hidden_times,
+%             block_activate,
+%             max_len=self.max_len,
+%         )
+
+%         self.decoder = Decoder(
+%             n_channel,
+%             n_feat,
+%             n_embd,
+%             n_heads,
+%             n_layer_dec,
+%             attn_pdrop,
+%             resid_pdrop,
+%             mlp_hidden_times,
+%             block_activate,
+%             condition_dim=n_embd,
+%             max_len=self.max_len,
+%         )
+%         self.jump_kernel_size = 16
+%         self.jump_filter = nn.Conv1d(
+%             n_feat,
+%             n_feat,
+%             kernel_size=self.jump_kernel_size,
+%             groups=n_feat,
+%             bias=False,
+%         )
+%         self.jump_gain = nn.Parameter(torch.tensor(1.0))
+%         self.jump_scale = nn.Parameter(torch.ones(1, 1, n_feat))
+%         with torch.no_grad():
+%             lags = torch.arange(self.jump_kernel_size, dtype=torch.float32)
+%             decay = torch.exp(-lags / (self.jump_kernel_size / 3))
+%             kernel = decay.view(1, 1, -1).repeat(n_feat, 1, 1)
+%             self.jump_filter.weight.copy_(kernel)
+
+%     def _causal_excitation(self, jump_scores: torch.Tensor) -> torch.Tensor:
+%         scores = jump_scores.transpose(1, 2)
+%         past_scores = F.pad(scores, (1, 0))[:, :, :-1]
+%         padded = F.pad(past_scores, (self.jump_kernel_size - 1, 0))
+%         excitation = self.jump_filter(padded)
+%         return excitation.transpose(1, 2)
+
+%     def forward(self, input, t, padding_masks=None, return_res=False):
+%         emb = self.emb(input)
+
+%         inp_enc = emb
+%         enc_cond = self.encoder(inp_enc, t, padding_masks=padding_masks)
+
+%         inp_dec = emb
+%         output, mean, trend, season, jump_scores = self.decoder(
+%             inp_dec, t, enc_cond, padding_masks=padding_masks
+%         )
+
+%         error = self.inverse(output)
+%         error_m = torch.mean(error, dim=1, keepdim=True)
+%         error = error - error_m
+
+%         season = self.combine_s(season.transpose(1, 2)).transpose(1, 2)
+
+%         excitation = self._causal_excitation(jump_scores)
+%         excited_scores = jump_scores + self.jump_gain * excitation
+%         jump = excited_scores * self.jump_scale
+%         jump_m = torch.mean(jump, dim=1, keepdim=True)
+%         jump = jump - jump_m
+
+%         trend = self.combine_m(mean) + error_m + jump_m + trend
+
+%         out = trend + season + jump + error
+%         decomposed = Decomposition(trend, season, jump, error)
+
+%         return out, decomposed
+
+% \end{lstlisting}

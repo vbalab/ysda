@@ -1,0 +1,88 @@
+\chapter{Introduction}
+
+\section{Background}
+
+Shortly taking on theorethical background, diffusion probabilistic models specify (i) forward Markov chain that, by repeatedly addng small amounts of Gaussian noise, converts an observed sample
+$x_0$ into a near-isotropic Gaussian $x_T$, and
+(ii) learned reverse-time chain $p_\theta(x_{t-1}\!\mid x_t)$ that removes noise step by step to
+recover samples from data distribution \cite{sohl2015noneq,ho2020ddpm}.
+
+In image generation \cite{ho2020ddpm},
+this training recipe couples a noise schedule with a denoising network. Sampling becomes an
+iterative sequence of steps of condtional reconstructions from $x_T\!\sim\!\mathcal{N}(0,I)$ to $x_0$. 
+
+These components transfer well to time series forecasting by treating unknown future segment as a
+conditional generation problem: given observed history -- conditional context window, a diffusion model can sample entire future
+trajectories by denoising noise variables.
+
+Feature-centric diffusion TSF keeps standard Gaussian coruption and places capacity in the
+conditioning path. With future block $\mathbf{x}_0\in\mathbb{R}^{H\times D}$ and context
+$\mathbf{x}_{-L+1:0}\in\mathbb{R}^{L\times D}$,
+\[
+\mathbf{x}_t=\sqrt{\bar\alpha_t}\,\mathbf{x}_0+\sqrt{1-\bar\alpha_t}\,\boldsymbol{\epsilon},\quad
+\boldsymbol{\epsilon}\sim\mathcal{N}(\mathbf{0},\mathbf{I}),
+\]
+and denoiser predicts noise under context features
+\[
+\hat{\boldsymbol{\epsilon}}=\epsilon_\theta(\mathbf{x}_t,\mathbf{c},t),\qquad
+\mathbf{c}=f_\phi(\mathbf{x}_{-L+1:0}),
+\]
+so reverse sampler uses $\hat{\boldsymbol{\epsilon}}$ to update $\mathbf{x}_{t-1}$ at each
+noise level. Architectural decisions therefore target $f_\phi$, fusion operator between
+$\mathbf{c}$ and the denoiser (e.g., channel-wise concat, cross-attention, FiLM-style modulation).
+
+Diffusion TSF inherits discretized reverse-time sampler. Practical inference commonly requires
+$\mathcal{O}(10^2\text{--}10^3)$ \cite{hu2024flowts} drift/denoiser evaluations per sample, making horizon-level
+genration expensive even when the conditioner is strong. Flow Matching \cite{lipman2022flowmatching} replaces the discrete reverse chain with a continuous-time transport ODE,
+\[
+\frac{d\mathbf{z}(t)}{dt}=\mathbf{v}_\theta(\mathbf{z}(t),t,\mathbf{c}),\qquad
+\mathbf{c}=f_\phi(\mathbf{x}_{-L+1:0}),
+\]
+and trains $\mathbf{v}_\theta$ on direct vector-field regression on a chosen probability path,
+without simulating an SDE/Markov chain.
+This targets the main computational bottleneck: sampling becomes numerical ODE integration with
+coarse step sizes when learned trajectories are near-straight rather than hundreds of
+noise-removal iterations. 
+
+Rectified flow \cite{liu2022rectified} explicitly optimizes for straight transport trajectories, it
+yields accurate generation under coarse (even single-step) discretization in inference phase.
+
+\section{Literature Review}
+
+Early work, such as TimeGrad \cite{rasul2021timegrad}, couples diffusion with an RNN encoder and autoregressive decoding scheme. RNN compresses the prefix into hidden states and the model samples future steps sequentially.
+CSDI \cite{tashiro2021csdi} replaces recurrence with transformer self-attention. This enables direct time-index interactions in
+the conditioning representation. This way of modelling directly supports blockwise recovery of $\hat{\mathbf{x}}_{1:H}$ in a
+single reverse trajectory.
+
+TimeDiff \cite{shen2023timediff} alters how target-side structure enters the conditional score. Future mixup injects partiallly revealed target components during training. Autoregressive initilization seeds the reverse chain with an explicit AR forecast to shift early
+iterations toward a residual refinement.
+
+Beyond feature encoders, S2DBM \cite{yang2024s2dbm} introduces a Brownian-Bridge series-to-series diffusion process with
+pinned endpoints. While ARMD \cite{gao2024armd} swaps endpoint semantics, treating the future block as the diffusion
+start state and the historical block as the terminal state, training reverse dynamics along this
+trajectory.
+
+FMTS \cite{hu2025fmts} instantiates rectified flow / flow matching on time-series blocks by transporting an entire
+future segment while conditioning on a context encoder, avoiding diffusion-style noise schedules and
+iterative denoising loops.
+FlowTS \cite{hu2024flowts} further develops this line with a rectified-flow ODE backbone for time-series generation and
+motivates the approach as a compute-efficient alternative to diffusion sampling in high-dimensional
+sequence spaces.
+
+\subsection{Stationarity Concerns}
+
+Major concern few paper actually discuss and try to mitigate is non-stationarity of the time-series data they work with. Generative time-series models existing prioritize architectural priors over manual differencing to handle non-stationarity by simply taking first-differences -- common practice in time-series econometrics.
+
+Distribution shift is primarly mitigated using Reversible Instance Normalization (RevIN) \cite{kim2021revin, shen2023timediff} or series stationarization backbones \cite{liu2022nonstationary} that restore temporal statistics during inference. Some frameworks, such as \cite{wang2024falda, mrdiff, yuan2024diffusionts, cdpm}, leverage seasonal-trend decomposition to isolate determinstic trends from stochastic components. FALDA \cite{wang2024falda} utilizes an NS-Adapter to mitigate epistemic uncertainty. LDT \cite{feng2024ldt} implements statistics-aware autoencoders with adaptive variance updating layers to stabilize latent space training against high-variance deviations.
+
+\section{Contribution}
+
+Inspired by the advancements in generative modelling in form of state of the art method -- Flow Matching, as well as opportunities in applying financial econometrics principles and methods of modelling, I propose FITS -- framework for time-series conditional probabilistic imputation in form of forecasting with decomposition of interpretable time-series components.
+
+Main contributions are as follows:
+
+\begin{enumerate}
+    \item Application of the simpliest, yet by far the most efficient method of working with non-stationary time-series -- taking of the first differences.
+    \item The broadening of interpretation capabilities by explicitely utilizing jump component within DiffusionTS \cite{yuan2024diffusionts} architecture.
+    \item The usage of SoTA Flow Matching within conditional task of time-series forecasting.
+\end{enumerate}

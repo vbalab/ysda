@@ -1,0 +1,169 @@
+%% ----------------------------------------------------------------
+%% term_paper.tex -- MAIN FILE (the one that you compile with LaTeX)
+%% ---------------------------------------------------------------- 
+
+% Set up the document
+\documentclass[a4paper, 11pt, oneside]{term_paper}  % Use the "term_paper" style, based on the ECS term_paper style by Steve Gunn
+\graphicspath{figures/}  % Location of the graphics files (set up for graphics to be in PDF format)
+
+% Include any extra LaTeX packages required
+\usepackage[square, numbers, comma, sort&compress]{natbib}  % Use the "Natbib" style for the references in the Bibliography
+\usepackage{verbatim}  % Needed for the "comment" environment to make LaTeX comments
+\usepackage{vector}  % Allows "\bvec{}" and "\buvec{}" for "blackboard" style bold vectors in maths
+\hypersetup{urlcolor=blue, colorlinks=true}  % Colours hyperlinks in blue, but this can be distracting if there are many links.
+\usepackage{tikz}
+
+\usepackage[T1]{fontenc}
+\usepackage[utf8]{inputenc}
+\usepackage{lmodern}
+\usepackage{textcomp}
+\usepackage{lastpage}
+\usepackage{booktabs}
+\usepackage{array}
+\usepackage{multirow}
+\usepackage{threeparttable}
+\usepackage{adjustbox}
+\usepackage{listings}
+\usepackage{xcolor}  % for setting colors (optional)
+
+% Optional: configure how your code will look
+\lstset{
+    language=Python,         % choose the language of the code
+    % basicstyle=\ttfamily\small,  % the size and style of the font
+    % keywordstyle=\color{blue},   % color of keywords
+    % commentstyle=\color{gray},   % color of comments
+    % stringstyle=\color{red},     % color of strings
+    % frame=single,               % adds a frame around the code
+    breaklines=true,            % automatic line breaking
+    % captionpos=b,               % caption position
+    numbers=left,               % line numbers on the left
+    numberstyle=\tiny\color{gray} % line number style
+}
+
+\usetikzlibrary{positioning, shapes, arrows.meta, decorations.pathreplacing, calc}
+\tikzset{
+    module/.style={draw, thick, rounded corners, align=center, fill=#1},
+    tensor/.style={draw, thick, shape=rectangle split, rectangle split parts=3, minimum height=2cm, minimum width=1cm, inner sep=2pt, rectangle split part fill={#1}},
+    arrow/.style={-Latex, thick},
+    brace/.style={decoration={brace, mirror}, decorate}
+}
+\usepackage{listings}
+
+\usepackage{amsmath}
+\DeclareMathOperator*{\argmin}{arg\,min}
+
+\usepackage{pdflscape}
+
+%% ----------------------------------------------------------------
+\begin{document}
+\frontmatter      % Begin Roman style (i, ii, iii, iv...) page numbering
+
+% Set up the Title Page
+\title{It just FITS: Interpretable Flow Matching-based Time-Series Forecasting}
+\authors {\texorpdfstring
+    {\href{vbalabaev@nes.ru}{Vladislav Balabaev}}
+    {Vladislav Balabaev}
+}
+\addresses  {\groupname\\\deptname\\\univname}  % Do not change this here, instead these must be set in the "term_paper.cls" file, please look through it instead
+\date       {\today}
+\subject    {}
+\keywords   {}
+
+\maketitle
+%% ----------------------------------------------------------------
+
+\setstretch{1.3}  % It is better to have smaller font and larger line spacing than the other way round
+
+% Define the page headers using the FancyHdr package and set up for one-sided printing
+\fancyhead{}  % Clears all page headers and footers
+\rhead{\thepage}  % Sets the right side header to show the page number
+\lhead{}  % Clears the left side page header
+
+\pagestyle{fancy}  % Finally, use the "fancy" page style to implement the FancyHdr headers
+
+% The Abstract Page
+\addtotoc{Abstract}  % Add the "Abstract" page entry to the Contents
+\abstract{
+    \addtocontents{toc}{\vspace{1em}}  % Add a gap in the Contents, for aesthetics
+    Recent advancements in a field of generative deep learning bring new efficient methods of modelling non-standard conditional distributions a good example of which is a task of time-series imputation and, specifically, forecasting. Taking into account nuances of time-series econometric modelling, this paper tries to apply the cutting-edge approach in generative deep learning methods -- Flow Matching, while being limited to interpretable forecasting.
+ }
+
+\clearpage  % Abstract ended, start a new page
+%% ----------------------------------------------------------------
+
+\setstretch{1.3}  % Reset the line-spacing to 1.3 for body text (if it has changed)
+
+
+%% ----------------------------------------------------------------
+\lhead{\emph{Contents}}  % Set the left side page header to "Contents"
+\tableofcontents  % Write out the Table of Contents
+
+%% ----------------------------------------------------------------
+\lhead{\emph{List of Figures}}  % Set the left side page header to "List if Figures"
+\listoffigures  % Write out the List of Figures
+
+%% ----------------------------------------------------------------
+\lhead{\emph{List of Tables}}  % Set the left side page header to "List of Tables"
+\listoftables  % Write out the List of Tables
+
+%% ----------------------------------------------------------------
+% \setstretch{1.5}  % Set the line spacing to 1.5, this makes the following tables easier to read
+% \clearpage  % Start a new page
+% \lhead{\emph{Abbreviations}}  % Set the left side page header to "Abbreviations"
+% \listofsymbols{ll}  % Include a list of Abbreviations (a table of two columns)
+% {
+%     % \textbf{Acronym} & \textbf{W}hat (it) \textbf{S}tands \textbf{F}or \\
+%     \textbf{FTAP}   & \textbf{F}undamental \textbf{T}heorem of \textbf{A}sset \textbf{P}ricing \\
+%     \textbf{SM}     & \textbf{S}emi\textbf{M}artingale \\
+% }
+
+%% ----------------------------------------------------------------
+
+% End of the pre-able, contents and lists of things
+% Begin the Dedication page
+
+\setstretch{1.3}  % Return the line spacing back to 1.3
+
+\addtocontents{toc}{\vspace{2em}}  % Add a gap in the Contents, for aesthetics
+
+%% ----------------------------------------------------------------
+\mainmatter  % Begin normal, numeric (1,2,3...) page numbering
+\pagestyle{fancy}  % Return the page headers back to the "fancy" style
+
+% Include the chapters of the term paper, as separate files
+% Just uncomment the lines as you write the chapters
+
+\input{chapters/01introduction}
+\input{chapters/02methodology}
+\input{chapters/03results}
+\input{chapters/04conclusion}
+
+%\input{chapters/Chapter7}
+
+%% ----------------------------------------------------------------
+% Now begin the appendices, including them as separate files
+
+\addtocontents{toc}{\vspace{2em}} % Add a gap in the Contents, for aesthetics
+
+\appendix % Cue to tell LaTeX that the following 'chapters' are appendices
+
+\input{appendices/appendix_a.tex}	% Appendix Title
+\input{appendices/appendix_b.tex}	% Appendix Title
+
+% \input{appendices/AppendixB} % Appendix Title
+
+%\input{appendices/AppendixC} % Appendix Title
+
+\addtocontents{toc}{\vspace{2em}}  % Add a gap in the Contents, for aesthetics
+\backmatter
+
+%% ----------------------------------------------------------------
+\nocite{*}
+
+\label{Bibliography}
+\lhead{\emph{Bibliography}}  % Change the left side page header to "Bibliography"
+\bibliographystyle{unsrtnat}  % Use the "unsrtnat" BibTeX style for formatting the Bibliography
+\bibliography{Bibliography}  % The references (bibliography) information are stored in the file named "Bibliography.bib"
+
+\end{document}  % The End
+%% ----------------------------------------------------------------

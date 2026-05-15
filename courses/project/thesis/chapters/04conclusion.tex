@@ -1,0 +1,7 @@
+\chapter{Conclusion}
+
+I introduced FITS, conditional probabilistic interpretable forecasting framework combining decomposition-aware Transformer (trend/season/jump/error heads) with flow-matching objctive for masked infilling.
+
+A key observation is the effect of first differences as a stationarization operator. Simply modelling increments reduces drift and time-varying marginal moments, yielding more stable conditinal target distribution, hence improving efficiency.
+
+The job is not done in a full measure, I already see that model encoder part might be better with CSDI's way of doing mixed time-feature learning, which blows GPU memory by a bit, but as I see it might have better potential, while keeping DiffusionTS's decoder that does component decomposition into interpretable elements.

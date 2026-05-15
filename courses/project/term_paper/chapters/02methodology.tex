@@ -1,0 +1,82 @@
+\chapter{Data and Methodology}
+
+\section{Modelling Methodology}
+
+I wanted to apply traditional time-series econometric modelling methods to SoTA Flow Matching method of modelling, while keeping it interpretable. For that I came up with improvements to the FMTS framework, while being conserned specifically with forecasting task solely. For that I've restructure a model for forecasting task specifically, so that it was trained conditionally on history, made it use first differenced stationary data and added jump component that is viewed as a traditional element in financial time-series econometrics. For a specific representation of jump component, I choose self-exciting jumps (Hawkes-style) with explicit history.
+
+\subsection{Jump Component}
+
+Given event times $0<t_1<t_2<\cdots$, define $N(t)=\sum_i \mathbf{1}\{t_i\le t\}$ and history
+$\mathcal{H}_t=\sigma(\{t_i:t_i<t\})$. The conditional intensity is
+\[
+\lambda(t)=\lim_{\Delta t\downarrow 0}\frac{\mathbb{P}(N(t+\Delta t)-N(t)=1\mid \mathcal{H}_t)}{\Delta t}.
+\]
+Poisson assumes history-invariant rate $\lambda(t)=\mu$. Hawkes introduces additive feedback
+\[
+\lambda(t)=\mu+\sum_{t_i<t}\phi(t-t_i),\qquad \phi(\tau)\ge 0,
+\]
+so each past event contributes $\phi(\cdot)$ as a function of age $t-t_i$. With exponential kernel
+$\phi(\tau)=\alpha e^{-\beta\tau}\mathbf{1}_{\{\tau>0\}}$, the branching ratio is
+$\eta=\int_0^\infty \phi(\tau)\,d\tau=\alpha/\beta$ and stationarity requires $\eta<1$, implying
+$\mathbb{E}[\lambda(t)]=\mu/(1-\eta)$. \cite{hawkes1971spectra,daley2003point,laub2015hawkes}
+
+\subsection{Backbone Architecture}
+
+For a conditional history context window -- input $\mathbf{x}\in\mathbb{R}^{B\times T\times D}$, the model applies a Conv-MLP
+embedding $\mathbf{e}=\mathrm{Emb}(\mathbf{x})\in\mathbb{R}^{B\times T\times d}$ and feeds it to
+to Transformer \cite{vaswani2017attention}. 
+
+Encoder blocks use self-attention
+with RMSNorm \cite{zhang2019rmsnorm} and RoPE
+\cite{su2021roformer}. Time conditioning enters each block through AdaLN,
+as in Transformer-based diffusion backbones \cite{peebles2023dit}.
+
+Decoder blocks alternte self-attention and cross-attention into encoder states and emit explicit
+components that are accmulated across layers:
+\[
+(\mathbf{T},\mathbf{S},\mathbf{J})=\sum_{\ell=1}^{L_d}(\Delta\mathbf{T}_\ell,\Delta\mathbf{S}_\ell,\Delta\mathbf{J}_\ell).
+\]
+
+Trend uses a low-degree polynomial basis regressor (degree $3$) \cite{oreshkin2019nbeats}. Seasonality is synthesized from
+frequency-domain features gathered through the usage of inverse-DFT/Fourier reconstruction \cite{zhou2022fedformer} and aligned with decomposed
+frequency-enhanced Transformers. Jump component head \cite{hawkes1971spectra} predicts per-timestep scores
+and applies a causal depthwise excitation filter
+\[
+\widetilde{\mathbf{J}}(t)=\mathbf{J}(t)+g\cdot(\kappa*\mathbf{J})(t),
+\qquad
+(\kappa*\mathbf{J})(t)=\sum_{\tau=1}^{K}\kappa(\tau)\mathbf{J}(t-\tau),
+\]
+with $\kappa(\tau)$ initialized as exponentially decaying lags, implementing discrete-time
+self-excitation. Residual channel \cite{zhou2022fedformer,peebles2023dit} is obtained by inverse projection of the final decoder latent,
+$\mathbf{E}=\mathrm{Inv}(\mathbf{u})-\mathrm{mean}_t[\mathrm{Inv}(\mathbf{u})]$, and the output is
+formed by an explicit additive reconstruction
+\[
+\widehat{\mathbf{x}}=\mathbf{T}+\mathbf{S}+\widetilde{\mathbf{J}}+\mathbf{E},
+\]
+enabling per-sample decomposition retrieval during inference.
+
+\subsection{Flow Matching Sampling}
+
+Flow matching trains vector field on the straight coupling between noise and data window
+$\mathbf{z}_1=\mathbf{x}$ with $\mathbf{z}_0\sim\mathcal{N}(0,I)$:
+\[
+    \mathbf{z}_t=t\,\mathbf{z}_1+(1-t)\,\mathbf{z}_0,\qquad
+    \mathbf{u}=\mathbf{z}_1-\mathbf{z}_0,\qquad
+    \mathcal{L}(\theta)=\mathbb{E}\big[\|\mathbf{M}\odot(\mathbf{v}_\theta(\mathbf{z}_t,t)-\mathbf{u})\|_2^2\big],
+    \]
+    where $\mathbf{M}$ is the forecast mask. Conditional infilling clamps observed indices
+    $\Omega$ by $\mathbf{z}_0[\Omega]\leftarrow \mathbf{z}_1[\Omega]$ and enforces the same constraint in
+    $\mathbf{z}_t$. Sampling iterates
+    \[
+        \mathbf{z}_1 \leftarrow \mathbf{z}_t+(1-t)\,\mathbf{v}_\theta(\mathbf{z}_t,t),
+        \quad t_k=(k/K)^\kappa,
+        \]
+        which becomes an exact endpoint projection when $\mathbf{v}_\theta(\mathbf{z}_t,t)=\mathbf{z}_1-\mathbf{z}_0$.
+
+\section{Data description}
+
+ETTh1 \cite{zhou2021informer,zhouhaoyiETDataset} is the hourly variant of the Electricity Transformer Temperature (ETT-small) benchmark, a 2-year multivariate record from one transformer station consisting of $7$ time-serieses.
+
+Solar \cite{lai2017lstnet,laiguokunMTSdata} is the LSTNet Solar-Energy benchmark, 10-minute photovoltaic power production from $137$ PV plants in Alabama.
+
+These two datasets are considered to be conventional for time series forecasting task. I trained and evaluated CSDI, DiffusionTS and FMTS models in order to compare them with FITS (mine) through various metrics (RMSE, MAE, CRPS and CRPS sum) and visualization tools (data density, PCA, t-SNE).

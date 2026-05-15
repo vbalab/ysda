@@ -23,6 +23,9 @@
 !.clang-tidy
 !.clangd
 !CMakeLists.txt
+!*.tex
+!*.cls
+!*.bib
 
 # Allow directories so Git can traverse into them
 !*/
