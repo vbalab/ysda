@@ -533,3 +533,21 @@ Where:
 $$
 \begin{bmatrix} u \\ v \\ 1 \end{bmatrix} = K \cdot \frac{1}{Z} \begin{bmatrix} X \\ Y \\ Z \end{bmatrix}
 $$
+
+## Frustum
+
+A **frustum** is the 3D volume you get when you take a pyramid (like a camera's field of view) and slice off the top with a plane parallel to the base — leaving a truncated pyramid shape.
+
+- **Camera frustum**
+
+    A camera sees the world as a pyramid expanding outward from the lens. The near and far clipping planes create a frustum that defines what's visible. Every 2D bounding box in an image corresponds to a smaller frustum in 3D space — you know the object is somewhere inside that volume, but you don't know exactly how far away it is.
+
+- Frustum-based 3D detection (e.g., **Frustum PointNets**)
+
+    The idea is: detect an object in 2D with a camera, project that 2D box into 3D to get a frustum, then look at only the LiDAR points that fall inside that frustum to estimate the 3D bounding box.
+
+    This is much more efficient than searching the entire point cloud.
+
+> TODO: whole 3 stage Frustum PointNet thing
+
+> TODO: Huber loss
